@@ -35,17 +35,9 @@ EEG = pop_eegfiltnew(EEG, low_cutoff, high_cutoff, [], 0, [], 0);
     % remove the bad channels found
     EEG = pop_select(EEG, 'nochannel', EEG.bad_channels);
 
-% bad segments based on spectrum
-    [~, EEG.bad_regions] = pop_rejcont(EEG,...
-        'freqlimit',    [20, 40],...  % lower and upper limits of frequencies
-        'epochlength',  5,...         % window size to examine (in s)
-        'overlap',      2,...         % amount of overlap in the windows
-        'threshold',    10,...        % frequency upper threshold in dB
-        'contiguous',   2,...         % number of contiguous epochs necessary to label a region as artifactual
-        'addlength',    0.5,...       % seconds to add to each artifact side
-        'onlyreturnselection', 'on',... % do not actually remove it, just label it
-        'taper',        'hamming',... % taper to use before FFT
-        'verbose',      'off');
+% bad segments
+    % use either eeglab or wispic options
+EEG = csc_artifact_rejection(EEG, 'eeglab');
 
 % plot the first bad region
     window = 2*EEG.srate;
