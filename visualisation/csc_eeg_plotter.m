@@ -19,7 +19,7 @@ function csc_eeg_plotter()
 % make a window
 % ~~~~~~~~~~~~~
 handles.fig = figure(...
-    'name',         'ewa EEG Plotter',...
+    'name',         'csc EEG Plotter',...
     'numberTitle',  'off',...
     'color',        [0.1, 0.1, 0.1],...
     'menuBar',      'none',...
@@ -57,6 +57,16 @@ handles.name_ax = axes(...
     'parent',       handles.fig             ,...
     'position',     [0 0.2, 0.1, 0.75]   ,...
     'visible',      'off');
+
+
+% create the uicontextmenu for the main axes
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+handles.selection.menu = uicontextmenu;
+handles.selection.item1 = uimenu(handles.selection.menu,...
+    'label', 'event 1');
+set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
+set(handles.selection.item1,...
+    'callback',     {@cb_event_selection, 1});
 
 % create the menu bar
 % ~~~~~~~~~~~~~~~~~~~
@@ -141,7 +151,7 @@ tmp = memmapfile(EEG.data,...
 eegData = tmp.Data.eegData;
 
 % set the name
-set(handles.fig, 'name', ['ewa: ', dataFile]);
+set(handles.fig, 'name', ['csc: ', dataFile]);
 
 % check for the channel locations
 if isempty(EEG.chanlocs)
@@ -154,15 +164,15 @@ if isempty(EEG.chanlocs)
 end
 
 % check for previous
-if ~isfield(EEG, 'ewa_montage')
+if ~isfield(EEG, 'csc_montage')
     % assign defaults
-    EEG.ewa_montage.display_channels    = 12;
-    EEG.ewa_montage.epoch_length        = 30;
-    EEG.ewa_montage.label_channels      = cell(EEG.ewa_montage.display_channels, 1);
-    EEG.ewa_montage.label_channels(:)   = deal({'undefined'});
-    EEG.ewa_montage.channels(:,1)       = [1:EEG.ewa_montage.display_channels]';
-    EEG.ewa_montage.channels(:,2)       = size(eegData, 1);
-    EEG.ewa_montage.filter_options      = [0.5; 30]';
+    EEG.csc_montage.display_channels    = 12;
+    EEG.csc_montage.epoch_length        = 30;
+    EEG.csc_montage.label_channels      = cell(EEG.csc_montage.display_channels, 1);
+    EEG.csc_montage.label_channels(:)   = deal({'undefined'});
+    EEG.csc_montage.channels(:,1)       = [1:EEG.csc_montage.display_channels]';
+    EEG.csc_montage.channels(:,2)       = size(eegData, 1);
+    EEG.csc_montage.filter_options      = [0.5; 30]';
 end
     
 % update the handles structure
@@ -187,28 +197,28 @@ EEG = getappdata(handles.fig, 'EEG');
 eegData = getappdata(handles.fig, 'eegData');
 
 % select the plotting data
-range       = 1:EEG.ewa_montage.epoch_length*EEG.srate;
-channels    = 1:EEG.ewa_montage.display_channels;
-data        = eegData(EEG.ewa_montage.channels(channels,1), range) - eegData(EEG.ewa_montage.channels(channels,2), range);
+range       = 1:EEG.csc_montage.epoch_length*EEG.srate;
+channels    = 1:EEG.csc_montage.display_channels;
+data        = eegData(EEG.csc_montage.channels(channels,1), range) - eegData(EEG.csc_montage.channels(channels,2), range);
 
 % filter the data
 % ~~~~~~~~~~~~~~~
 [EEG.filter.b, EEG.filter.a] = ...
-        butter(2,[EEG.ewa_montage.filter_options(1)/(EEG.srate/2),...
-                  EEG.ewa_montage.filter_options(2)/(EEG.srate/2)]);
+        butter(2,[EEG.csc_montage.filter_options(1)/(EEG.srate/2),...
+                  EEG.csc_montage.filter_options(2)/(EEG.srate/2)]);
 data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twice
 
 % plot the data
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:EEG.ewa_montage.display_channels]'*scale;
+toAdd = [1:EEG.csc_montage.display_channels]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
 data = data+toAdd;
 
-set([handles.main_ax, handles.name_ax], 'yLim', [scale 0]*(EEG.ewa_montage.display_channels+1))
+set([handles.main_ax, handles.name_ax], 'yLim', [scale 0]*(EEG.csc_montage.display_channels+1))
 
 % in the case of replotting delete the old handles
 if isfield(handles, 'plot_eeg')
@@ -225,10 +235,10 @@ handles.plot_eeg = line(time, data,...
                         'parent', handles.main_ax);
                   
 % plot the labels in their own boxes
-handles.labels = zeros(length(EEG.ewa_montage.label_channels(channels)), 1);
-for chn = 1:length(EEG.ewa_montage.label_channels(channels))
+handles.labels = zeros(length(EEG.csc_montage.label_channels(channels)), 1);
+for chn = 1:length(EEG.csc_montage.label_channels(channels))
     handles.labels(chn) = ...
-        text(0.5, toAdd(chn,1)+scale/5, EEG.ewa_montage.label_channels{chn},...
+        text(0.5, toAdd(chn,1)+scale/5, EEG.csc_montage.label_channels{chn},...
         'parent', handles.name_ax,...
         'fontsize',   12,...
         'fontweight', 'bold',...
@@ -264,9 +274,9 @@ eegData = getappdata(handles.fig, 'eegData');
         
 % select the plotting data
 current_point = get(handles.cPoint, 'value');
-range       = current_point:current_point+EEG.ewa_montage.epoch_length*EEG.srate-1;
-channels    = 1:EEG.ewa_montage.display_channels;
-data        = eegData(EEG.ewa_montage.channels(channels, 1), range) - eegData(EEG.ewa_montage.channels(channels, 2), range);
+range       = current_point:current_point+EEG.csc_montage.epoch_length*EEG.srate-1;
+channels    = 1:EEG.csc_montage.display_channels;
+data        = eegData(EEG.csc_montage.channels(channels, 1), range) - eegData(EEG.csc_montage.channels(channels, 2), range);
 
 data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twice
 
@@ -274,7 +284,7 @@ data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose 
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:EEG.ewa_montage.display_channels]'*scale;
+toAdd = [1:EEG.csc_montage.display_channels]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
@@ -290,7 +300,7 @@ set(handles.main_ax,  'xlim', [time(1), time(end)]);
 set(handles.plot_eeg, 'xdata', time);
 
 % reset the ydata of each line to represent the new data calculated
-for n = 1:EEG.ewa_montage.display_channels
+for n = 1:EEG.csc_montage.display_channels
     set(handles.plot_eeg(n), 'ydata', data(n,:));
 end 
 
@@ -307,7 +317,7 @@ if current_point < 1
     set(handles.cPoint, 'value', 1);
 elseif current_point > EEG.pnts
     fprintf(1, 'No more data \n');
-    set(handles.cPoint, 'value', EEG.pnts-(EEG.ewa_montage.epoch_length*EEG.srate));
+    set(handles.cPoint, 'value', EEG.pnts-(EEG.csc_montage.epoch_length*EEG.srate));
 end
 current_point = get(handles.cPoint, 'value');
 
@@ -322,14 +332,14 @@ setappdata(handles.fig, 'EEG', EEG);
 fcn_update_axes(handles.fig);
 
 
-function fcn_hide_channel(object, ~);
+function fcn_hide_channel(object, ~)
 % get the handles from the guidata
 handles = guidata(object);
-% Get the EEG from the figure's appdata
-EEG = getappdata(handles.fig, 'EEG');
 
+% find the indice of the selected channel
 ch = find(handles.labels == object);
 
+% get its current state ('on' or 'off')
 state = get(handles.plot_eeg(ch), 'visible');
 
 switch state
@@ -361,13 +371,13 @@ if isempty(event.Modifier)
         case 'leftarrow'
             % move to the previous epoch
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - EEG.ewa_montage.epoch_length*EEG.srate);
+                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length*EEG.srate);
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move to the next epoch
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + EEG.ewa_montage.epoch_length*EEG.srate);
+                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length*EEG.srate);
             fcn_change_time(object, [])
             
         case 'uparrow'
@@ -381,7 +391,7 @@ if isempty(event.Modifier)
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.ewa_montage.display_channels+1))
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
             fcn_update_axes(object)
             
         case 'downarrow'
@@ -395,7 +405,7 @@ if isempty(event.Modifier)
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.ewa_montage.display_channels+1))
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
             fcn_update_axes(object)
     end
 
@@ -413,6 +423,58 @@ elseif strcmp(event.Modifier, 'control')
 end
 
 
+function cb_event_selection(object, ~, event_type)
+% get the handles
+handles = guidata(object);
+
+% check if its the first item
+if ~isfield(handles, 'events')
+   handles.events = []; 
+end
+
+current_point = get(handles.main_ax, 'currentPoint');
+
+% mark the main axes
+% ~~~~~~~~~~~~~~~~~~
+x = current_point(1);
+y = get(handles.main_ax, 'ylim');
+
+% draw bottom triangle
+handles.events{event_type}(end+1, 1) = plot(x, y(1),...
+    'lineStyle', 'none',...
+    'marker', '^',...
+    'markerSize', 20,...
+    'markerEdgeColor', [0.6, 0.9, 0.9],...
+    'markerFaceColor', [0.9, 0.9, 0.6],...
+    'userData', event_type,...
+    'parent', handles.main_ax);
+
+% draw top triangle
+handles.events{event_type}(end, 2) = plot(x, y(2),...
+    'lineStyle', 'none',...
+    'marker', 'v',...
+    'markerSize', 20,...
+    'markerEdgeColor', [0.6, 0.9, 0.9],...
+    'markerFaceColor', [0.9, 0.9, 0.6],...
+    'userData', event_type,...
+    'parent', handles.main_ax);
+
+% mark the spike axes
+% ~~~~~~~~~~~~~~~~~~~
+y = get(handles.spike_ax, 'ylim');
+handles.events{event_type}(end, 3) = line([x, x], y,...
+    'color', [0.6, 0.9, 0.9],...
+    'parent', handles.spike_ax,...
+    'userData', event_type,...
+    'hitTest', 'off');
+
+% update the GUI handles
+guidata(handles.fig, handles)
+
+
+
+
+
 function fcn_options(object, ~, type)
 % get the handles
 handles = guidata(object);
@@ -423,13 +485,13 @@ switch type
     case 'disp_chans'
      
         answer = inputdlg('number of channels',...
-            '', 1, {num2str( EEG.ewa_montage.display_channels )});
+            '', 1, {num2str( EEG.csc_montage.display_channels )});
 
         % if different from previous
         if ~isempty(answer)
             newNumber = str2double(answer{1});
-            if newNumber ~= EEG.ewa_montage.display_channels && newNumber <= length(EEG.ewa_montage.label_channels); 
-                EEG.ewa_montage.display_channels = newNumber;
+            if newNumber ~= EEG.csc_montage.display_channels && newNumber <= length(EEG.csc_montage.label_channels); 
+                EEG.csc_montage.display_channels = newNumber;
                 % update the eeg structure before call
                 setappdata(handles.fig, 'EEG', EEG);
                 plot_initial_data(object)
@@ -441,13 +503,13 @@ switch type
     case 'epoch_length'
         
         answer = inputdlg('length of epoch',...
-            '', 1, {num2str( EEG.ewa_montage.epoch_length )});
+            '', 1, {num2str( EEG.csc_montage.epoch_length )});
         
         % if different from previous
         if ~isempty(answer)
             newNumber = str2double(answer{1});
-            if newNumber ~= EEG.ewa_montage.epoch_length 
-                EEG.ewa_montage.epoch_length = newNumber;
+            if newNumber ~= EEG.csc_montage.epoch_length 
+                EEG.csc_montage.epoch_length = newNumber;
                 % update the eeg structure before call
                 setappdata(handles.fig, 'EEG', EEG);
                 plot_initial_data(object)
@@ -461,13 +523,13 @@ end
 % ^^^^^^^^^^^^^^^^^
 function fcn_montage_setup(object, ~)
 % get the original figure handles
-handles.ewa_plotter = guidata(object);
-EEG = getappdata(handles.ewa_plotter.fig, 'EEG');
+handles.csc_plotter = guidata(object);
+EEG = getappdata(handles.csc_plotter.fig, 'EEG');
 
 % make a window
 % ~~~~~~~~~~~~~
 handles.fig = figure(...
-    'name',         'ewa montage setup',...
+    'name',         'csc montage setup',...
     'numberTitle',  'off',...
     'color',        [0.1, 0.1, 0.1],...
     'menuBar',      'none',...
@@ -491,7 +553,7 @@ handles.main_ax = axes(...
 
 % drop-down list of montages
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~
-montage_dir  = which('ewa_eeg_plotter.m');
+montage_dir  = which('csc_eeg_plotter.m');
 montage_dir  = fullfile(fileparts(montage_dir), 'Montages');
 montage_list = dir(fullfile(montage_dir, '*.emo'));
 
@@ -568,10 +630,10 @@ handles.button_apply = uicontrol(...
 set(handles.button_apply, 'callback', {@fcn_button_apply});
 
 % set the initial table values
-data = cell(length(EEG.ewa_montage.label_channels), 3);
+data = cell(length(EEG.csc_montage.label_channels), 3);
 % current montage
-data(:,1) = deal(EEG.ewa_montage.label_channels);
-data(:,[2,3]) = num2cell(EEG.ewa_montage.channels);
+data(:,1) = deal(EEG.csc_montage.label_channels);
+data(:,[2,3]) = num2cell(EEG.csc_montage.channels);
 
 % put the data into the table
 set(handles.table, 'data', data);
@@ -586,7 +648,7 @@ plot_net(handles.fig)
 function plot_net(montage_handle)
 % get the handles and EEG structure
 handles  = guidata(montage_handle);
-EEG = getappdata(handles.ewa_plotter.fig, 'EEG');
+EEG = getappdata(handles.csc_plotter.fig, 'EEG');
 
 if ~isfield(EEG.chanlocs(1), 'x')
    EEG.chanlocs = swa_add2dlocations(EEG.chanlocs); 
@@ -625,7 +687,7 @@ end
 set(handles.plt_markers, 'ButtonDownFcn', {@bdf_select_channel});
 
 guidata(handles.fig, handles);
-setappdata(handles.ewa_plotter.fig, 'EEG', EEG);
+setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 update_net_arrows(handles.fig)
 
@@ -633,7 +695,7 @@ update_net_arrows(handles.fig)
 function update_net_arrows(montage_handle)
 % get the handles and EEG structure
 handles     = guidata(montage_handle);
-EEG         = getappdata(handles.ewa_plotter.fig, 'EEG');
+EEG         = getappdata(handles.csc_plotter.fig, 'EEG');
 
 x = [EEG.chanlocs.x];
 y = [EEG.chanlocs.y];
@@ -710,7 +772,7 @@ update_net_arrows(handles.fig)
 function fcn_button_apply(object, ~)
 % get the montage handles
 handles = guidata(object);
-EEG     = getappdata(handles.ewa_plotter.fig, 'EEG');
+EEG     = getappdata(handles.csc_plotter.fig, 'EEG');
 
 % get the table data
 data = get(handles.table, 'data');
@@ -720,27 +782,27 @@ if any(any(cellfun(@(x) ~isa(x, 'double'), data(:,[2,3]))))
     fprintf(1, 'Warning: check that all channel inputs are numbers\n');
 end
 
-EEG.ewa_montage.label_channels  = data(:,1);
-EEG.ewa_montage.channels        = cell2mat(data(:,[2,3]));
+EEG.csc_montage.label_channels  = data(:,1);
+EEG.csc_montage.channels        = cell2mat(data(:,[2,3]));
 
-if length(EEG.ewa_montage.label_channels) < EEG.ewa_montage.display_channels
-    EEG.ewa_montage.display_channels = length(EEG.ewa_montage.label_channels);
+if length(EEG.csc_montage.label_channels) < EEG.csc_montage.display_channels
+    EEG.csc_montage.display_channels = length(EEG.csc_montage.label_channels);
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
 guidata(handles.fig, handles);
-setappdata(handles.ewa_plotter.fig, 'EEG', EEG);
+setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
-plot_initial_data(handles.ewa_plotter.fig);
+plot_initial_data(handles.csc_plotter.fig);
 
 
 function fcn_select_montage(object, ~)
 % get the montage handles
 handles = guidata(object);
-EEG     = getappdata(handles.ewa_plotter.fig, 'EEG');
+EEG     = getappdata(handles.csc_plotter.fig, 'EEG');
 
 % find the montage directory
-montage_dir  = which('ewa_eeg_plotter.m');
+montage_dir  = which('csc_eeg_plotter.m');
 montage_dir  = fullfile(fileparts(montage_dir), 'Montages');
 
 % get the file name
@@ -759,7 +821,7 @@ end
 
 % update the handles in the structure
 guidata(handles.fig, handles);
-setappdata(handles.ewa_plotter.fig, 'EEG', EEG);
+setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 % update the arrows on the montage plot
 update_net_arrows(handles.fig)
@@ -773,7 +835,7 @@ handles = guidata(object);
 data = get(handles.table, 'data');
 
 % find the montage directory
-montage_dir  = which('ewa_eeg_plotter.m');
+montage_dir  = which('csc_eeg_plotter.m');
 montage_dir  = fullfile(fileparts(montage_dir), 'Montages');
 
 % ask user for the filename
