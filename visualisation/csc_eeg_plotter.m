@@ -68,6 +68,7 @@ set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
 set(handles.selection.item(1),...
     'callback',     {@cb_event_selection, 1});
 
+
 % create the menu bar
 % ~~~~~~~~~~~~~~~~~~~
 handles.menu.file       = uimenu(handles.fig, 'label', 'file');
@@ -89,7 +90,9 @@ handles.menu.disp_chans = uimenu(handles.menu.options,...
 handles.menu.epoch_length = uimenu(handles.menu.options,...
     'label', 'epoch length',...
     'accelerator', 'e');
-
+handles.menu.filter_settings = uimenu(handles.menu.options,...
+    'label', 'filter settings',...
+    'accelerator', 'f');
 
 % scale indicator
 % ~~~~~~~~~~~~~~~
@@ -118,6 +121,7 @@ set(handles.menu.events,    'callback', {@fcn_event_browser});
 
 set(handles.menu.disp_chans,   'callback', {@fcn_options, 'disp_chans'});
 set(handles.menu.epoch_length, 'callback', {@fcn_options, 'epoch_length'});
+set(handles.menu.filter_settings, 'callback', {@fcn_options, 'filter_settings'});
 
 set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
@@ -494,9 +498,17 @@ handles.events{event_type}(event_number, :) = [];
 guidata(handles.fig, handles)
 
 
+% Event Functions
+% ^^^^^^^^^^^^^^^
 function fcn_event_browser(object, ~)
 % get the handles
 handles.csc_plotter = guidata(object);
+
+% check if any events exist
+if ~isfield(handles, 'events')
+    fprintf(1, 'Warning: No events were found in the data \n');
+    return
+end
 
 handles.fig = figure(...
     'name',         'csc event browser',...
@@ -541,7 +553,7 @@ set(handles.table, 'data', event_data);
 guidata(handles.fig, handles)
 
 
-function event_data = fcn_compute_events(handles)
+function event_data = fcn_compute_events(handles, ~)
 % function used to create the event_table from the handle structure
 
 % pull out the events from the handles structure
@@ -597,6 +609,7 @@ selected_sample = floor(go_to_time * EEG.srate);
 % change the hidden time keeper
 set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 
+% update the time in the plotter window
 fcn_change_time(handles.csc_plotter.fig, []);
 
 
@@ -641,6 +654,21 @@ switch type
             end
         end
         
+    case 'filter_settings'
+        
+        answer = inputdlg({'low cut-off', 'high cut-off'},...
+            '', 1, {num2str( EEG.csc_montage.filter_options(1)),...
+                    num2str( EEG.csc_montage.filter_options(2))});
+        
+        % get and set the new values
+        new_values = str2double(answer);
+        if ~isequal(new_values, EEG.csc_montage.filter_options')
+            EEG.csc_montage.filter_options = new_values;
+            % update the eeg structure before call
+            setappdata(handles.fig, 'EEG', EEG);
+            fcn_update_axes(object, []);
+        end
+            
 end
 
 
