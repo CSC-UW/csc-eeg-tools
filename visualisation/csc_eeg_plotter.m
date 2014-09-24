@@ -62,10 +62,10 @@ handles.name_ax = axes(...
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 handles.selection.menu = uicontextmenu;
-handles.selection.item1 = uimenu(handles.selection.menu,...
+handles.selection.item(1) = uimenu(handles.selection.menu,...
     'label', 'event 1');
 set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
-set(handles.selection.item1,...
+set(handles.selection.item(1),...
     'callback',     {@cb_event_selection, 1});
 
 % create the menu bar
@@ -79,6 +79,8 @@ handles.menu.save       = uimenu(handles.menu.file,...
     'Accelerator', 's');
 
 handles.menu.montage    = uimenu(handles.fig, 'label', 'montage', 'enable', 'off');
+
+handles.menu.events     = uimenu(handles.fig, 'label', 'events', 'accelerator', 'v');
 
 handles.menu.options    = uimenu(handles.fig, 'label', 'options');
 handles.menu.disp_chans = uimenu(handles.menu.options,...
@@ -109,8 +111,10 @@ handles.cPoint = uicontrol(...
 
 % set the callbacks
 % ~~~~~~~~~~~~~~~~~
-set(handles.menu.load, 'callback', {@fcn_load_eeg});
-set(handles.menu.montage, 'callback', {@fcn_montage_setup});
+set(handles.menu.load,      'callback', {@fcn_load_eeg});
+set(handles.menu.montage,   'callback', {@fcn_montage_setup});
+set(handles.menu.events,    'callback', {@fcn_event_browser});
+
 
 set(handles.menu.disp_chans,   'callback', {@fcn_options, 'disp_chans'});
 set(handles.menu.epoch_length, 'callback', {@fcn_options, 'epoch_length'});
@@ -488,6 +492,86 @@ handles.events{event_type}(event_number, :) = [];
 
 % update the GUI handles
 guidata(handles.fig, handles)
+
+
+function fcn_event_browser(object, ~)
+% get the handles
+handles.csc_plotter = guidata(object);
+
+handles.fig = figure(...
+    'name',         'csc event browser',...
+    'numberTitle',  'off',...
+    'color',        [0.1, 0.1, 0.1],...
+    'menuBar',      'none',...
+    'units',        'normalized',...
+    'outerPosition',[0 0.5 0.1 0.5]);
+
+% montage table
+handles.table = uitable(...
+    'parent',       handles.fig             ,...
+    'units',        'normalized'            ,...
+    'position',     [0.05, 0.1, 0.9, 0.8]   ,...
+    'backgroundcolor', [0.1, 0.1, 0.1; 0.2, 0.2, 0.2],...
+    'foregroundcolor', [0.9, 0.9, 0.9]      ,...
+    'columnName',   {'type','time'});
+
+% get the underlying java properties
+jscroll = findjobj(handles.table);
+jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
+
+% make the table sortable
+% get the java table from the jscroll
+jtable = jscroll.getViewport.getView;
+jtable.setSortable(true);
+jtable.setMultiColumnSortable(true);
+
+% auto-adjust the column width
+jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+
+% set the callback for table cell selection
+set(handles.table, 'cellSelectionCallback', {@cb_select_table});
+
+% calculate the event_data from the handles
+event_data = fcn_compute_events(handles.csc_plotter);
+
+% put the data into the table
+set(handles.table, 'data', event_data);
+
+
+function event_data = fcn_compute_events(handles)
+% function used to create the event_table from the handle structure
+
+% pull out the events from the handles structure
+events = handles.events;
+
+% calculate the number of events
+no_events = cellfun(@(x) size(x,1), events);
+
+% pre-allocate the event data
+event_data = cell(sum(no_events), 2);
+
+% loop for each event type
+for type = 1:length(no_events)
+    % skip event type if there are no events
+    if isempty(events{type})
+        continue;
+    end
+    
+    % calculate the rows to be inserted
+    range = sum(no_events(1:type)) - sum(no_events(1:type)) + 1 : sum(no_events(1:type));
+    
+    % deal the event type into the event_data
+    event_data(range, 1) = {get(handles.selection.item(type), 'label')};
+    
+    % return the xdata from the handles
+    event_data(range, 2) = get(events{type}(:,1), 'xdata');
+    
+end
+
+
+function cb_select_table(object, ~)
+
+
 
 
 function fcn_options(object, ~, type)
