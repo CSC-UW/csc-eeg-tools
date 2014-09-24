@@ -537,6 +537,9 @@ event_data = fcn_compute_events(handles.csc_plotter);
 % put the data into the table
 set(handles.table, 'data', event_data);
 
+% update the GUI handles
+guidata(handles.fig, handles)
+
 
 function event_data = fcn_compute_events(handles)
 % function used to create the event_table from the handle structure
@@ -569,9 +572,32 @@ for type = 1:length(no_events)
 end
 
 
-function cb_select_table(object, ~)
+function cb_select_table(object, event_data)
+% when a cell in the table is selected, jump to that time point
 
+% get the handles
+handles = guidata(object);
 
+% get the data
+EEG = getappdata(handles.csc_plotter.fig, 'EEG');
+
+% if the event column was selected return
+if event_data.Indices(2) == 1
+    return
+end
+
+% return the data from the table
+table_data = get(object, 'data');
+
+% retrieve the time from the table
+selected_time = table_data{event_data.Indices(1), 2};
+go_to_time = selected_time - EEG.csc_montage.epoch_length/2;
+selected_sample = floor(go_to_time * EEG.srate);
+
+% change the hidden time keeper
+set(handles.csc_plotter.cPoint, 'Value', selected_sample);
+
+fcn_change_time(handles.csc_plotter.fig, []);
 
 
 function fcn_options(object, ~, type)
@@ -700,6 +726,12 @@ handles.table = uitable(...
     'foregroundcolor', [0.9, 0.9, 0.9]      ,...
     'columnName',   {'name','chn','ref'},...
     'columnEditable', [true, true, true]);
+
+% automatically adjust the column width using java handle
+jscroll = findjobj(handles.table);
+jtable  = jscroll.getViewport.getView;
+jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+
 
 % create the buttons
 handles.button_delete = uicontrol(...
