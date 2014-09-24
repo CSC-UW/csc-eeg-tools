@@ -1,33 +1,4 @@
-function [fft_all, freq_range] = csc_average_reference_and_FFT(EEG, varargin)
-
-% set default options
-% ~~~~~~~~~~~~~~~~~~~
-options = struct(...
-    'ave_ref',          1       ,...
-    'bad_channels',     []      ,...
-    'save_file',        0       ,...
-    'epoch_length',     6);
-
-%# read the acceptable names
-optionNames = fieldnames(options);
-
-% count arguments
-nArgs = length(varargin);
-if round(nArgs/2)~=nArgs/2
-   error('optional arguments needs propertyName/propertyValue pairs')
-end
-
-% process any additional arguments
-for pair = reshape(varargin,2,[]) %# pair is {propName;propValue}
-   inpName = lower(pair{1}); %# make case insensitive
-
-   if any(strmatch(inpName, optionNames))
-      options.(inpName) = pair{2};
-   else
-      fprintf(1, '%s is not a recognized parameter name', inpName);
-   end
-end
-
+function [fft_all, freq_range] = csc_average_reference_and_FFT(EEG, options)
 
 % remove bad channels
 % ~~~~~~~~~~~~~~~~~~~
@@ -80,7 +51,7 @@ no_epochs = floor(size(EEG.data, 2) / no_epoch_samples);
 
 % pre-allocate the size of the fft variable
     %TODO: change arbitrary 240 frequency bins to something useful
-freq_limit = 240;
+freq_limit = options.freq_limit;
 fft_all=NaN(no_channels, freq_limit, no_epochs + 1);
 
 % TODO: Use appropriate inputs to pwelch function for epoch split
@@ -118,8 +89,7 @@ freq_range = F(1 : freq_limit);
 if options.save_file
     
     % save the file in the current directory
-    filenameFFT=[EEG.filename(1:end-4) '_fftANok.mat'];
-    save(filenameFFT, 'fft_all', 'F', '-v7.3');
+    save(options.save_name, 'fft_all', 'freq_range', '-v7.3');
     
 end
 
