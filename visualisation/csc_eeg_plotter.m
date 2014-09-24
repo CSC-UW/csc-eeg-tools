@@ -429,7 +429,7 @@ handles = guidata(object);
 
 % check if its the first item
 if ~isfield(handles, 'events')
-   handles.events = []; 
+   handles.events{event_type} = []; 
 end
 
 current_point = get(handles.main_ax, 'currentPoint');
@@ -447,7 +447,8 @@ handles.events{event_type}(end+1, 1) = plot(x, y(1),...
     'markerEdgeColor', [0.6, 0.9, 0.9],...
     'markerFaceColor', [0.9, 0.9, 0.6],...
     'userData', event_type,...
-    'parent', handles.main_ax);
+    'parent', handles.main_ax,...
+    'buttonDownFcn', {@bdf_delete_event, event_type});
 
 % draw top triangle
 handles.events{event_type}(end, 2) = plot(x, y(2),...
@@ -457,7 +458,8 @@ handles.events{event_type}(end, 2) = plot(x, y(2),...
     'markerEdgeColor', [0.6, 0.9, 0.9],...
     'markerFaceColor', [0.9, 0.9, 0.6],...
     'userData', event_type,...
-    'parent', handles.main_ax);
+    'parent', handles.main_ax,...
+    'buttonDownFcn', {@bdf_delete_event, event_type});
 
 % mark the spike axes
 % ~~~~~~~~~~~~~~~~~~~
@@ -472,7 +474,20 @@ handles.events{event_type}(end, 3) = line([x, x], y,...
 guidata(handles.fig, handles)
 
 
+function bdf_delete_event(object, ~, event_type)
+% get the handles
+handles = guidata(object);
 
+event_number = get(object, 'userData');
+
+% erase the object from the main and spike axes
+delete(handles.events{event_type}(event_number, :));
+
+% erase the event from the list
+handles.events{event_type}(event_number, :) = [];
+
+% update the GUI handles
+guidata(handles.fig, handles)
 
 
 function fcn_options(object, ~, type)
