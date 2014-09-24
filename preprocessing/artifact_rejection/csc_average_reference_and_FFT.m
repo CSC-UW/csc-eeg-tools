@@ -85,8 +85,9 @@ fft_all=NaN(no_channels, freq_limit, no_epochs + 1);
 
 % TODO: Use appropriate inputs to pwelch function for epoch split
 % loop for each channel
+fprintf(1, '\nInformation: Calculating FFT: Channel ');
 for channel = 1:no_channels
-    fprintf(1, '%s, ', channel);
+    fprintf(1, '%s, ', num2str(channel));
     
     % start a count for the epochs
     epoch_count = 1;
@@ -121,3 +122,5 @@ if options.save_file
     save(filenameFFT, 'fft_all', 'F', '-v7.3');
     
 end
+
+fprintf(1, '\nInformation: FFT calculation complete \n');
