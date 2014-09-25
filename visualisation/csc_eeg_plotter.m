@@ -115,9 +115,9 @@ handles.cPoint = uicontrol(...
 % set the callbacks
 % ~~~~~~~~~~~~~~~~~
 set(handles.menu.load,      'callback', {@fcn_load_eeg});
+set(handles.menu.save,      'callback', {@fcn_save_eeg});
 set(handles.menu.montage,   'callback', {@fcn_montage_setup});
 set(handles.menu.events,    'callback', {@fcn_event_browser});
-
 
 set(handles.menu.disp_chans,   'callback', {@fcn_options, 'disp_chans'});
 set(handles.menu.epoch_length, 'callback', {@fcn_options, 'epoch_length'});
@@ -194,6 +194,23 @@ set(handles.menu.montage, 'enable', 'on');
 
 % plot the initial data
 plot_initial_data(handles.fig)
+
+
+function fcn_save_eeg(object, ~)
+% get the handles from the figure
+handles = guidata(object);
+
+% get the EEG from the figure's appdata
+EEG = getappdata(handles.fig, 'EEG');
+
+% add the event table to the EEG struct
+EEG.crc_event_data = fcn_compute_events(handles);
+
+% Ask where to put file...
+[saveFile, savePath] = uiputfile('*.set');
+
+% since the data has not changed we can just save the EEG part, not the data
+save(fullfile(savePath, saveFile), 'EEG', '-mat');
 
 
 function plot_initial_data(object)
@@ -505,7 +522,7 @@ function fcn_event_browser(object, ~)
 handles.csc_plotter = guidata(object);
 
 % check if any events exist
-if ~isfield(handles, 'events')
+if ~isfield(handles.csc_plotter, 'events')
     fprintf(1, 'Warning: No events were found in the data \n');
     return
 end
