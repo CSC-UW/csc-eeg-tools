@@ -1,4 +1,4 @@
-function ArtifactDetection_semiAuto(subject)
+function csc_artifact_detection_semiauto(subject)
 
 %bc = bad channels (optional argurment)
 
@@ -13,10 +13,11 @@ filenameall=[subject '_fftANok'];
 eval(['load ',filenameall,'.mat']);
 nch=size(fftNREM_SWAar,1);
 
-badchannels=zeros(1,nch);NREMepAll=~isnan(fftNREM_SWAar(1,:));
-araus_ndx=[]; araus_epsixstart=[]; araus_epsixend=[];
-% araus_ndx=find(seseventinfoar(:,3)==2);araus_epsixstart=floor(seseventinfoar(araus_ndx,2)-seseventinfoar(1,2))/(128*6); araus_epsixend=floor(seseventinfoar(araus_ndx,2) +seseventinfoar(araus_ndx,8) -seseventinfoar(1,2))/(128*6);
-% yscale=repmat(15,length(araus_ndx),1);
+badchannels=zeros(1,nch);
+NREMepAll=~isnan(fftNREM_SWAar(1,:));
+araus_ndx=[]; araus_epsixstart=[]; 
+araus_epsixend=[];
+
 yscale=[];
 for c = 1: nch;
     %    ndx185=inside185(:); int=intersect(c,ndx185);
@@ -27,12 +28,6 @@ for c = 1: nch;
         bc_string=[''];
     end
  
-    
-%     for cy = 1:size(lenghtofSleepep_sixsec,1);
-%         p=patch([lenghtofSleepep_sixsec(cy,1); lenghtofSleepep_sixsec(cy,1);lenghtofSleepep_sixsec(cy,2); lenghtofSleepep_sixsec(cy,2)],[0; 2000; 2000; 0],'y'); set(p,'EdgeColor',[1 1 1]);
-%         hold on; p=patch([lenghtofSleepep_sixsec(cy,3); lenghtofSleepep_sixsec(cy,3); lenghtofSleepep_sixsec(cy,4);lenghtofSleepep_sixsec(cy,4)],[0; 2000; 2000; 0],'r'); set(p,'EdgeColor',[1 1 1]);
-%         hold on;
-%     end
 figure    
 hold on; set(gca,'Ylim',[0 2000]); title(['SWA Epochrange  ch= ',num2str(c)  ],'Fontsize',20);
    
