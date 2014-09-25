@@ -7,8 +7,8 @@ The tools can be used on their own or by using one of the template files provide
 Get the code
 ^^^^^^^^^^^^
 
-To get the latest code using git, simply type::
-    git clone https://github.com/TononiLab/csc-eeg-tools.git
+To get the latest code using git, simply type:
+    git clone https://github.com/CSC-UW/csc-eeg-tools.git
 
 Installation
 ^^^^^^^^^^^^
