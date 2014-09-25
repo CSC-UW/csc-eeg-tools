@@ -37,17 +37,26 @@ EEG = pop_eegfiltnew(EEG, low_cutoff, high_cutoff, [], 0, [], 0);
 
 % bad segments
     % use either eeglab or wispic options
-EEG = csc_artifact_rejection(EEG, 'eeglab');
+    method = 'wispic';
+EEG = csc_artifact_rejection(EEG, method);
+EEG = csc_artifact_rejection(EEG, method, 'epoch_length', 6);
 
 % plot the first bad region
-    window = 2*EEG.srate;
-    plot(EEG.data(:, EEG.bad_regions(1,1)-window:EEG.bad_regions(1,2)+window)',...
+    window = 2 * EEG.srate;
+    plot(EEG.data(:, EEG.bad_regions(1,1)-window : EEG.bad_regions(1,2)+window)',...
         'color', [0.8, 0.8, 0.8]);
     
 % remove the bad_regions
-    EEG = pop_select(EEG, 'nopoint', EEG.bad_regions);
+switch method
+    % eeglab regions are given as samples
+    case 'eeglab'
+        EEG = pop_select(EEG, 'nopoint', EEG.bad_regions);
+    % wispic regions are given as time in seconds    
+    case 'wispic'
+        EEG = pop_select(EEG, 'notime', EEG.bad_regions);
+end
 
-    
+
 % independent components analysis 
 % ```````````````````````````````
 % run ICA (optional)
@@ -73,6 +82,7 @@ EEG.bad_components = find(EEG.reject.gcompreject);
 EEG.bad_components = [EEG.bad_components,];
 EEG = pop_subcomp( EEG , EEG.bad_components);
 EEG = eeg_checkset(EEG);
+
 
 % interpolate the removed channels
 % ````````````````````````````````
