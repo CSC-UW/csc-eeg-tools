@@ -37,8 +37,7 @@ EEG = pop_eegfiltnew(EEG, low_cutoff, high_cutoff, [], 0, [], 0);
 
 % bad segments
     % use either eeglab or wispic options
-    method = 'wispic';
-EEG = csc_artifact_rejection(EEG, method);
+method = 'wispic';
 EEG = csc_artifact_rejection(EEG, method, 'epoch_length', 6);
 
 % plot the first bad region
