@@ -37,7 +37,7 @@ switch method
         bad_epochs = csc_artifact_detection_fft(fft_bands, [1,5], 'semi_automatic');
         
         % calculate the bad epochs in time
-        bad_epochs_time = find(bad_epochs) - 1 * options.epoch_length;
+        bad_epochs_time = (find(bad_epochs) * options.epoch_length) - options.epoch_length;
         
         % rearrange the time stamps into regions
         EEG.bad_regions = [bad_epochs_time', bad_epochs_time' + options.epoch_length];
