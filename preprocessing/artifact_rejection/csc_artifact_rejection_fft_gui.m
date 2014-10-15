@@ -1,4 +1,4 @@
-function channel_thresholds = crc_artifact_detection_fft_gui(fft_bands, thresholds)
+function channel_thresholds = csc_artifact_rejection_fft_gui(fft_bands, thresholds)
 
 % set some default options
 options.ylimitmax = 0;
