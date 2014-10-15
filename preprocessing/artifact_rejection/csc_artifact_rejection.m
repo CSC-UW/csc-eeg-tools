@@ -65,7 +65,7 @@ options = struct(...
     'epoch_length',     6       ,...
     'freq_limit',       240     );
 
-%# read the acceptable names
+% read the acceptable names
 optionNames = fieldnames(options);
 
 % count arguments
@@ -75,8 +75,8 @@ if round(nArgs/2)~=nArgs/2
 end
 
 % process any additional arguments
-for pair = reshape(varargin,2,[]) %# pair is {propName;propValue}
-    inpName = lower(pair{1}); %# make case insensitive
+for pair = reshape(varargin,2,[]) % pair is {propName;propValue}
+    inpName = lower(pair{1}); % make case insensitive
     
     if any(strmatch(inpName, optionNames))
         options.(inpName) = pair{2};

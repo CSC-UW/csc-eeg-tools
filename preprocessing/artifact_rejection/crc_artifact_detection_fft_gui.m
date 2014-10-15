@@ -194,16 +194,35 @@ switch eventdata.Key
         if nCh > 1
             handles.jslider.setValue(nCh-1);
         end
+        
+        fcn_update_plots(object);
+
+        
     case 'rightarrow'
         % move to the next wave if not at the end
         if nCh < handles.jslider.getMaximum
             handles.jslider.setValue(nCh+1);
         end
-    otherwise
-        return
+
+        fcn_update_plots(object);
+
+    case 'uparrow'
+        current_limits = get(handles.axes, 'ylim');
+
+        % set each axes individually
+        for n = 1:length(current_limits) 
+            set(handles.axes(n), 'ylim', current_limits{n}/1.3);
+        end
+        
+    case 'downarrow'
+        current_limits = get(handles.axes, 'ylim');
+
+        % set each axes individually
+        for n = 1:length(current_limits) 
+            set(handles.axes(n), 'ylim', current_limits{n}*1.3);
+        end
 end
 
-fcn_update_plots(object);
 
 
 function cb_mark_threshold(object, ~, band)
