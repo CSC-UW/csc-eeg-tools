@@ -224,6 +224,7 @@ eegData = getappdata(handles.fig, 'eegData');
 % select the plotting data
 range       = 1:EEG.csc_montage.epoch_length*EEG.srate;
 channels    = 1:EEG.csc_montage.display_channels;
+% TODO: options for original and average reference
 data        = eegData(EEG.csc_montage.channels(channels,1), range) - eegData(EEG.csc_montage.channels(channels,2), range);
 
 % filter the data
@@ -727,11 +728,16 @@ montage_dir  = which('csc_eeg_plotter.m');
 montage_dir  = fullfile(fileparts(montage_dir), 'Montages');
 montage_list = dir(fullfile(montage_dir, '*.emo'));
 
-% check 
+% TODO: add original and average reference
+
+% default list
+default_list = {''; 'original'};
+
+% check the list
 if ~isempty(montage_list)
-    montage_list = [{''}; {montage_list.name}'];
+    montage_list = [default_list; {montage_list.name}'];
 else
-    montage_list = {''};
+    montage_list = default_list;
 end
 
 % create the drop down
@@ -986,13 +992,15 @@ montage_name = get(handles.montage_list, 'string');
 montage_name = montage_name{get(handles.montage_list, 'value')};
 
 % check if the empty string was selected
-if ~isempty(montage_name)
+if ~isempty(montage_name) && ~strcmp(montage_name, 'original')
     montage = load(fullfile(montage_dir, montage_name), '-mat');
     if isfield(montage, 'data')
         set(handles.table, 'data', montage.data);
     else
         fprintf(1, 'Warning: could not find montage data in the file');
     end
+elseif ~isempty(montage_name) && strcmp(montage_name, 'original')
+    % TODO make unreferenced montage
 end
 
 % update the handles in the structure
