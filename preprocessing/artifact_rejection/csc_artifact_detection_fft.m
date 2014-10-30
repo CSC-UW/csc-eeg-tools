@@ -15,7 +15,7 @@ channel_thresholds = squeeze(prctile(fft_bands, default_percentile, 2));
 % plot the channels and bands of interest
 if strcmp(method, 'semi_automatic')
     
-    channel_thresholds = crc_artifact_detection_fft_gui(fft_bands, channel_thresholds);
+    channel_thresholds = csc_artifact_rejection_fft_gui(fft_bands, channel_thresholds);
        
 end
 
