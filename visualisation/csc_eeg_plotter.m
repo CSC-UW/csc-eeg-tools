@@ -444,6 +444,18 @@ elseif strcmp(event.Modifier, 'control')
             
         case 'uparrow'
             %             fprintf(1, 'more channels \n');
+            
+        case 'leftarrow'
+            % move a little to the left
+            set(handles.cPoint, 'Value',...
+                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length/5 * EEG.srate);
+            fcn_change_time(object, [])
+            
+        case 'rightarrow'
+            % move a little to the right
+            set(handles.cPoint, 'Value',...
+                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length/5 * EEG.srate);
+            fcn_change_time(object, [])
     end
     
 end
