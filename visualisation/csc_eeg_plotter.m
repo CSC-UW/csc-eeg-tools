@@ -386,132 +386,6 @@ set(handles.cPoint, 'Value', floor(clicked_position(1,1)));
 fcn_change_time(object, []);
 
 
-function cb_key_pressed(object, event)
-% get the relevant data
-handles = guidata(object);
-EEG = getappdata(handles.fig, 'EEG');
-
-% movement keys
-if isempty(event.Modifier)
-    switch event.Key
-        case 'leftarrow'
-            % move to the previous epoch
-            set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length*EEG.srate);
-            fcn_change_time(object, [])
-            
-        case 'rightarrow'
-            % move to the next epoch
-            set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length*EEG.srate);
-            fcn_change_time(object, [])
-            
-        case 'uparrow'
-            scale = get(handles.txt_scale, 'value');
-            if scale <= 20
-                value = scale / 2;
-                set(handles.txt_scale, 'value', value);
-            else
-                value = scale - 20;
-                set(handles.txt_scale, 'value', value);
-            end
-            
-            set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
-            fcn_update_axes(object)
-            
-        case 'downarrow'
-            scale = get(handles.txt_scale, 'value');
-            if scale <= 20
-                value = scale * 2;
-                set(handles.txt_scale, 'value', value);
-            else
-                value = scale + 20;
-                set(handles.txt_scale, 'value', value);
-            end
-            
-            set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
-            fcn_update_axes(object)
-    end
-
-% check whether the ctrl is pressed also
-elseif strcmp(event.Modifier, 'control')
-    
-    switch event.Key
-        case 'c'
-            %TODO: pop_up for channel number
-            
-        case 'uparrow'
-            %             fprintf(1, 'more channels \n');
-            
-        case 'leftarrow'
-            % move a little to the left
-            set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length/5 * EEG.srate);
-            fcn_change_time(object, [])
-            
-        case 'rightarrow'
-            % move a little to the right
-            set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length/5 * EEG.srate);
-            fcn_change_time(object, [])
-    end
-    
-end
-
-
-function cb_event_selection(object, ~, event_type)
-% get the handles
-handles = guidata(object);
-
-% check if its the first item
-if ~isfield(handles, 'events')
-   handles.events{event_type} = []; 
-end
-
-current_point = get(handles.main_ax, 'currentPoint');
-
-% mark the main axes
-% ~~~~~~~~~~~~~~~~~~
-x = current_point(1);
-y = get(handles.main_ax, 'ylim');
-
-% draw bottom triangle
-handles.events{event_type}(end+1, 1) = plot(x, y(1),...
-    'lineStyle', 'none',...
-    'marker', '^',...
-    'markerSize', 20,...
-    'markerEdgeColor', [0.6, 0.9, 0.9],...
-    'markerFaceColor', [0.9, 0.9, 0.6],...
-    'userData', event_type,...
-    'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event, event_type});
-
-% draw top triangle
-handles.events{event_type}(end, 2) = plot(x, y(2),...
-    'lineStyle', 'none',...
-    'marker', 'v',...
-    'markerSize', 20,...
-    'markerEdgeColor', [0.6, 0.9, 0.9],...
-    'markerFaceColor', [0.9, 0.9, 0.6],...
-    'userData', event_type,...
-    'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event, event_type});
-
-% mark the spike axes
-% ~~~~~~~~~~~~~~~~~~~
-y = get(handles.spike_ax, 'ylim');
-handles.events{event_type}(end, 3) = line([x, x], y,...
-    'color', [0.6, 0.9, 0.9],...
-    'parent', handles.spike_ax,...
-    'userData', event_type,...
-    'hitTest', 'off');
-
-% update the GUI handles
-guidata(handles.fig, handles)
-
-
 function bdf_delete_event(object, ~, event_type)
 % get the handles
 handles = guidata(object);
@@ -643,6 +517,66 @@ set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 fcn_change_time(handles.csc_plotter.fig, []);
 
 
+function cb_event_selection(object, ~, event_type)
+% get the handles
+handles = guidata(object);
+% Get the EEG from the figure's appdata
+EEG = getappdata(handles.fig, 'EEG');
+
+% check if its the first item
+if ~isfield(handles, 'events')
+   handles.events{event_type} = []; 
+end
+
+current_point = get(handles.main_ax, 'currentPoint');
+
+% mark the main axes
+% ~~~~~~~~~~~~~~~~~~
+x = current_point(1);
+y = get(handles.main_ax, 'ylim');
+
+% draw bottom triangle
+handles.events{event_type}(end+1, 1) = plot(x, y(1),...
+    'lineStyle', 'none',...
+    'marker', '^',...
+    'markerSize', 20,...
+    'markerEdgeColor', [0.6, 0.9, 0.9],...
+    'markerFaceColor', [0.9, 0.9, 0.6],...
+    'userData', event_type,...
+    'parent', handles.main_ax,...
+    'buttonDownFcn', {@bdf_delete_event, event_type});
+
+% draw top triangle
+handles.events{event_type}(end, 2) = plot(x, y(2),...
+    'lineStyle', 'none',...
+    'marker', 'v',...
+    'markerSize', 20,...
+    'markerEdgeColor', [0.6, 0.9, 0.9],...
+    'markerFaceColor', [0.9, 0.9, 0.6],...
+    'userData', event_type,...
+    'parent', handles.main_ax,...
+    'buttonDownFcn', {@bdf_delete_event, event_type});
+
+% mark the spike axes
+% ~~~~~~~~~~~~~~~~~~~
+% get the y limits of the event axes
+y = get(handles.spike_ax, 'ylim');
+
+% translate the current x point into the event axes
+sample_point = floor(x * EEG.srate);
+
+handles.events{event_type}(end, 3) = line([sample_point, sample_point], y,...
+    'color', [0.6, 0.9, 0.9],...
+    'parent', handles.spike_ax,...
+    'userData', event_type,...
+    'hitTest', 'off');
+
+% update the GUI handles
+guidata(handles.fig, handles)
+
+
+% Options Menu and their Keyboard Shortcuts
+% ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 function fcn_options(object, ~, type)
 % get the handles
 handles = guidata(object);
@@ -699,6 +633,80 @@ switch type
             fcn_update_axes(object, []);
         end
             
+end
+
+function cb_key_pressed(object, event)
+% get the relevant data
+handles = guidata(object);
+EEG = getappdata(handles.fig, 'EEG');
+
+% movement keys
+if isempty(event.Modifier)
+    switch event.Key
+        case 'leftarrow'
+            % move to the previous epoch
+            set(handles.cPoint, 'Value',...
+                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length*EEG.srate);
+            fcn_change_time(object, [])
+            
+        case 'rightarrow'
+            % move to the next epoch
+            set(handles.cPoint, 'Value',...
+                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length*EEG.srate);
+            fcn_change_time(object, [])
+            
+        case 'uparrow'
+            scale = get(handles.txt_scale, 'value');
+            if scale <= 20
+                value = scale / 2;
+                set(handles.txt_scale, 'value', value);
+            else
+                value = scale - 20;
+                set(handles.txt_scale, 'value', value);
+            end
+            
+            set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
+            fcn_update_axes(object)
+            
+        case 'downarrow'
+            scale = get(handles.txt_scale, 'value');
+            if scale <= 20
+                value = scale * 2;
+                set(handles.txt_scale, 'value', value);
+            else
+                value = scale + 20;
+                set(handles.txt_scale, 'value', value);
+            end
+            
+            set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
+            fcn_update_axes(object)
+    end
+
+% check whether the ctrl is pressed also
+elseif strcmp(event.Modifier, 'control')
+    
+    switch event.Key
+        case 'c'
+            %TODO: pop_up for channel number
+            
+        case 'uparrow'
+            %             fprintf(1, 'more channels \n');
+            
+        case 'leftarrow'
+            % move a little to the left
+            set(handles.cPoint, 'Value',...
+                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length/5 * EEG.srate);
+            fcn_change_time(object, [])
+            
+        case 'rightarrow'
+            % move a little to the right
+            set(handles.cPoint, 'Value',...
+                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length/5 * EEG.srate);
+            fcn_change_time(object, [])
+    end
+    
 end
 
 
