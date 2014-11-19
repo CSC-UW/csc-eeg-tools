@@ -204,7 +204,7 @@ handles = guidata(object);
 EEG = getappdata(handles.fig, 'EEG');
 
 % add the event table to the EEG struct
-EEG.crc_event_data = fcn_compute_events(handles);
+EEG.csc_event_data = fcn_compute_events(handles);
 
 % Ask where to put file...
 [saveFile, savePath] = uiputfile('*.set');
@@ -328,7 +328,9 @@ set(handles.plot_eeg, 'xdata', time);
 % reset the ydata of each line to represent the new data calculated
 for n = 1:EEG.csc_montage.display_channels
     set(handles.plot_eeg(n), 'ydata', data(n,:));
-end 
+end
+
+x = 2;
 
 
 function fcn_change_time(object, ~)
@@ -384,22 +386,6 @@ clicked_position = get(handles.spike_ax, 'currentPoint');
 
 set(handles.cPoint, 'Value', floor(clicked_position(1,1)));
 fcn_change_time(object, []);
-
-
-function bdf_delete_event(object, ~, event_type)
-% get the handles
-handles = guidata(object);
-
-event_number = get(object, 'userData');
-
-% erase the object from the main and spike axes
-delete(handles.events{event_type}(event_number, :));
-
-% erase the event from the list
-handles.events{event_type}(event_number, :) = [];
-
-% update the GUI handles
-guidata(handles.fig, handles)
 
 
 % Event Functions
@@ -517,7 +503,7 @@ set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 fcn_change_time(handles.csc_plotter.fig, []);
 
 
-function cb_event_selection(object, ~, event_type)
+function cb_event_selection(object, ~, event_type, current_point)
 % get the handles
 handles = guidata(object);
 % Get the EEG from the figure's appdata
@@ -528,7 +514,10 @@ if ~isfield(handles, 'events')
    handles.events{event_type} = []; 
 end
 
-current_point = get(handles.main_ax, 'currentPoint');
+% check if event latency is pre-specified
+if nargin < 4
+    current_point = get(handles.main_ax, 'currentPoint');
+end
 
 % mark the main axes
 % ~~~~~~~~~~~~~~~~~~
@@ -574,6 +563,48 @@ handles.events{event_type}(end, 3) = line([sample_point, sample_point], y,...
 % update the GUI handles
 guidata(handles.fig, handles)
 
+
+function bdf_delete_event(object, ~)
+% get the handles
+handles = guidata(object);
+
+% calculate the event number
+event_type = get(object, 'userData');
+event_number = mod(find(object == handles.events{event_type}), size(handles.events{event_type}, 1));
+
+% check for event 0, which is really the last event
+if event_number == 0
+    event_number = size(handles.events{event_type}, 1);
+end
+
+% erase the object from the main and spike axes
+delete(handles.events{event_type}(event_number, :));
+
+% erase the event from the list
+handles.events{event_type}(event_number, :) = [];
+
+% update the GUI handles
+guidata(handles.fig, handles)
+
+
+function fcn_redraw_events(object, ~)
+% function to erase all events and redraw their markers based on the
+% csc_event_data array in the EEG structure
+
+% get the handles
+handles = guidata(object);
+% Get the EEG from the figure's appdata
+EEG = getappdata(handles.fig, 'EEG');
+
+% TODO check for current events and delete their handles
+
+% get the event type from the event labels
+
+
+% loop through each event
+for n = 1:size(EEG.csc_event_data, 1)
+    cb_event_selection(object, [], event_type, current_point)
+end
 
 % Options Menu and their Keyboard Shortcuts
 % ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
