@@ -62,11 +62,15 @@ handles.name_ax = axes(...
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 handles.selection.menu = uicontextmenu;
-handles.selection.item(1) = uimenu(handles.selection.menu,...
-    'label', 'event 1');
 set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
-set(handles.selection.item(1),...
-    'callback',     {@cb_event_selection, 1});
+% TODO: move to loading stage and read from file or create these defaults
+number_of_event_types = 2;
+for n = 1:number_of_event_types
+    handles.selection.item(n) = uimenu(handles.selection.menu,...
+        'label', ['event ', num2str(n)], 'userData', n);
+    set(handles.selection.item(n),...
+        'callback',     {@cb_event_selection, n});
+end
 
 
 % create the menu bar
@@ -130,7 +134,8 @@ set(handles.spike_ax, 'buttondownfcn', {@fcn_time_select});
 
 guidata(handles.fig, handles)
 
-
+% File Loading and Saving
+% ^^^^^^^^^^^^^^^^^^^^^^^
 function fcn_load_eeg(object, ~)
 % get the handles structure
 handles = guidata(object);
@@ -194,6 +199,11 @@ set(handles.menu.montage, 'enable', 'on');
 
 % plot the initial data
 plot_initial_data(handles.fig)
+
+% redraw event triangles if present
+if isfield(EEG, 'csc_event_data')
+   fcn_redraw_events(object, []); 
+end
 
 
 function fcn_save_eeg(object, ~)
@@ -300,9 +310,11 @@ eegData = getappdata(handles.fig, 'eegData');
         
 % select the plotting data
 current_point = get(handles.cPoint, 'value');
-range       = current_point:current_point+EEG.csc_montage.epoch_length*EEG.srate-1;
+range       = current_point:...
+              current_point + EEG.csc_montage.epoch_length * EEG.srate - 1;
 channels    = 1:EEG.csc_montage.display_channels;
-data        = eegData(EEG.csc_montage.channels(channels, 1), range) - eegData(EEG.csc_montage.channels(channels, 2), range);
+data        = eegData(EEG.csc_montage.channels(channels, 1), range)...
+            - eegData(EEG.csc_montage.channels(channels, 2), range);
 
 data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twice
 
@@ -330,8 +342,6 @@ for n = 1:EEG.csc_montage.display_channels
     set(handles.plot_eeg(n), 'ydata', data(n,:));
 end
 
-x = 2;
-
 
 function fcn_change_time(object, ~)
 % get the handles from the guidata
@@ -343,9 +353,10 @@ current_point = get(handles.cPoint, 'value');
 if current_point < 1
     fprintf(1, 'This is the first sample \n');
     set(handles.cPoint, 'value', 1);
-elseif current_point > EEG.pnts
+elseif current_point > EEG.pnts - EEG.csc_montage.epoch_length * EEG.srate
     fprintf(1, 'No more data \n');
-    set(handles.cPoint, 'value', EEG.pnts-(EEG.csc_montage.epoch_length*EEG.srate));
+    set(handles.cPoint,...
+        'value', EEG.pnts - EEG.csc_montage.epoch_length * EEG.srate );
 end
 current_point = get(handles.cPoint, 'value');
 
@@ -415,7 +426,7 @@ handles.table = uitable(...
     'position',     [0.05, 0.1, 0.9, 0.8]   ,...
     'backgroundcolor', [0.1, 0.1, 0.1; 0.2, 0.2, 0.2],...
     'foregroundcolor', [0.9, 0.9, 0.9]      ,...
-    'columnName',   {'type','time'});
+    'columnName',   {'label','time', 'type'});
 
 % get the underlying java properties
 jscroll = findjobj(handles.table);
@@ -453,7 +464,7 @@ events = handles.events;
 no_events = cellfun(@(x) size(x,1), events);
 
 % pre-allocate the event data
-event_data = cell(sum(no_events), 2);
+event_data = cell(sum(no_events), 3);
 
 % loop for each event type
 for type = 1:length(no_events)
@@ -463,13 +474,17 @@ for type = 1:length(no_events)
     end
     
     % calculate the rows to be inserted
-    range = sum(no_events(1:type)) - sum(no_events(1:type)) + 1 : sum(no_events(1:type));
+    % TODO: range calculation breaks for multiple event types
+    range = sum(no_events(1:type - 1)) + 1 : sum(no_events(1:type));
     
     % deal the event type into the event_data
     event_data(range, 1) = {get(handles.selection.item(type), 'label')};
     
     % return the xdata from the handles
     event_data(range, 2) = get(events{type}(:,1), 'xdata');
+    
+    % add the event type number in case labels are changed
+    event_data(range, 3) = {type};
     
 end
 
@@ -511,7 +526,7 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % check if its the first item
 if ~isfield(handles, 'events')
-   handles.events{event_type} = []; 
+   handles.events = cell(length(handles.selection.item), 1);
 end
 
 % check if event latency is pre-specified
@@ -533,7 +548,7 @@ handles.events{event_type}(end+1, 1) = plot(x, y(1),...
     'markerFaceColor', [0.9, 0.9, 0.6],...
     'userData', event_type,...
     'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event, event_type});
+    'buttonDownFcn', {@bdf_delete_event});
 
 % draw top triangle
 handles.events{event_type}(end, 2) = plot(x, y(2),...
@@ -544,7 +559,7 @@ handles.events{event_type}(end, 2) = plot(x, y(2),...
     'markerFaceColor', [0.9, 0.9, 0.6],...
     'userData', event_type,...
     'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event, event_type});
+    'buttonDownFcn', {@bdf_delete_event});
 
 % mark the spike axes
 % ~~~~~~~~~~~~~~~~~~~
@@ -598,13 +613,11 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % TODO check for current events and delete their handles
 
-% get the event type from the event labels
-
-
 % loop through each event
 for n = 1:size(EEG.csc_event_data, 1)
-    cb_event_selection(object, [], event_type, current_point)
+    cb_event_selection(object, [], EEG.csc_event_data{n, 3}, EEG.csc_event_data{n, 2})
 end
+
 
 % Options Menu and their Keyboard Shortcuts
 % ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -700,6 +713,12 @@ if isempty(event.Modifier)
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
             fcn_update_axes(object)
             
+            % update the event lower triangles
+            y_limits = get(handles.main_ax, 'ylim');
+            relevant_handles = cell2mat(cellfun(@(x) x(:, 1), handles.events, 'uniformOutput', false)); 
+            set(relevant_handles, 'ydata', y_limits(1))
+            
+            
         case 'downarrow'
             scale = get(handles.txt_scale, 'value');
             if scale <= 20
@@ -713,6 +732,11 @@ if isempty(event.Modifier)
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
             fcn_update_axes(object)
+            
+            % update the event lower triangles
+            y_limits = get(handles.main_ax, 'ylim');
+            relevant_handles = cell2mat(cellfun(@(x) x(:, 1), handles.events, 'uniformOutput', false)); 
+            set(relevant_handles, 'ydata', y_limits(1))
     end
 
 % check whether the ctrl is pressed also
