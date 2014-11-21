@@ -715,7 +715,8 @@ if isempty(event.Modifier)
             
             % update the event lower triangles
             y_limits = get(handles.main_ax, 'ylim');
-            relevant_handles = cell2mat(cellfun(@(x) x(:, 1), handles.events, 'uniformOutput', false)); 
+            relevant_handles = cell2mat(handles.events);
+            relevant_handles = relevant_handles(:,1); 
             set(relevant_handles, 'ydata', y_limits(1))
             
             
@@ -735,7 +736,8 @@ if isempty(event.Modifier)
             
             % update the event lower triangles
             y_limits = get(handles.main_ax, 'ylim');
-            relevant_handles = cell2mat(cellfun(@(x) x(:, 1), handles.events, 'uniformOutput', false)); 
+            relevant_handles = cell2mat(handles.events);
+            relevant_handles = relevant_handles(:,1); 
             set(relevant_handles, 'ydata', y_limits(1))
     end
 
