@@ -16,11 +16,6 @@ function csc_eeg_plotter()
         %Green line in front of headset
         %headset electrodes smaller due to poor resolution on my computer
 
-% Defaults
-DEF_DISPLAY_CHANNELS = 12;
-DEF_EPOCH_LENGTH = 30;
-DEF_FILTER = [0.5, 30]'; %note transpose
-
 % make a window
 % ~~~~~~~~~~~~~
 handles.fig = figure(...
@@ -64,7 +59,7 @@ handles.name_ax = axes(...
     'visible',      'off');
 
 % Set display channels
-handles.n_disp_chans = DEF_DISPLAY_CHANNELS;
+handles.n_disp_chans = 12;
 handles.disp_chans = [1:handles.n_disp_chans];
 
 % create the uicontextmenu for the main axes
@@ -198,13 +193,13 @@ end
 % check for previous
 if ~isfield(EEG, 'csc_montage')
     % assign defaults
-    EEG.csc_montage.display_channels    = DEF_DISPLAY_CHANNELS;
-    EEG.csc_montage.epoch_length        = DEF_EPOCH_LENGTH;
+    EEG.csc_montage.display_channels    = 12;
+    EEG.csc_montage.epoch_length        = 30;
     EEG.csc_montage.label_channels      = cell(EEG.csc_montage.display_channels, 1);
     EEG.csc_montage.label_channels(:)   = deal({'undefined'});
     EEG.csc_montage.channels(:,1)       = [1:EEG.csc_montage.display_channels]';
     EEG.csc_montage.channels(:,2)       = size(eegData, 1);
-    EEG.csc_montage.filter_options      = DEF_FILTER;
+    EEG.csc_montage.filter_options      = [0.3, 40];
 end
     
 % update the handles structure
@@ -664,7 +659,7 @@ switch type
         answer = strsplit(answer{1}, ':'); 
 
         if length(answer) > 2 %for example '1:2:5' was provided as input
-          fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing.');
+          fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing.\n');
           return
         end
 
@@ -674,9 +669,9 @@ switch type
                                      length(EEG.csc_montage.label_channels)); 
           handles.disp_chans = [1:handles.n_disp_chans];
         else %length(answer) == 2, so a range was provided
-          disp_chans = [str2double(answer{1}:str2double(answer{2}))];
+          disp_chans = [str2double(answer{1}):str2double(answer{2})];
           if isempty(disp_chans) %if bogus input like '99:12' was provided
-            fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing');
+            fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing\n');
             return
           else %input was good
             handles.disp_chans = disp_chans;
@@ -684,6 +679,7 @@ switch type
           end
         end
 
+        guidata(object, handles);
         plot_initial_data(object)
         
     case 'epoch_length'
@@ -1084,8 +1080,8 @@ end
 EEG.csc_montage.label_channels  = data(:,1);
 EEG.csc_montage.channels        = cell2mat(data(:,[2,3]));
 
-if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
-    handles.n_disp_chans = length(EEG.csc_montage.label_channels);
+if length(EEG.csc_montage.label_channels) < handles.csc_plotter.n_disp_chans
+    handles.csc_plotter.n_disp_chans = length(EEG.csc_montage.label_channels);
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
@@ -1114,7 +1110,7 @@ if ~isempty(montage_name) && ~strcmp(montage_name, 'original')
     if isfield(montage, 'data')
         set(handles.table, 'data', montage.data);
     else
-        fprintf(1, 'Warning: could not find montage data in the file');
+        fprintf(1, 'Warning: could not find montage data in the file.\n');
     end
 elseif ~isempty(montage_name) && strcmp(montage_name, 'original')
     % TODO make unreferenced montage
