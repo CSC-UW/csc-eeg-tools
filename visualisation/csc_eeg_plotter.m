@@ -262,7 +262,7 @@ data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose 
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:handles.n_disp_chans]'*scale;
+toAdd = [1:handles.n_disp_chans+1]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
@@ -316,7 +316,14 @@ setappdata(handles.fig, 'EEG', EEG);
 
 function scroll_callback(object, ~)
   handles = guidata(object);
+  EEG = getappdata(handles.fig, 'EEG');
   
+  val = 1-object.Value;
+  startChan = ceil(val*(length(EEG.csc_montage.label_channels)-handles.n_disp_chans));
+  handles.disp_chans = [startChan:startChan+handles.n_disp_chans];
+  
+  guidata(object, handles);
+  plot_initial_data(object);
 
 function fcn_update_axes(object, ~)
 % get the handles structure
@@ -340,7 +347,7 @@ data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose 
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:handles.n_disp_chans]'*scale;
+toAdd = [1:handles.n_disp_chans+1]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
