@@ -116,6 +116,17 @@ handles.cPoint = uicontrol(...
     'Visible',  'off',...
     'Value',    1);
 
+% vertical scrollbar for selecting display channels
+handles.vertical_scroll = uicontrol(...
+    'Parent',   handles.fig,...
+    'Units',    'normalized',... % MUST PRECEDE 'Position' OPTION! Awful.
+    'Style',    'slider',...
+    'Position', [.01, .4, .015, .4],... % height > width specifies vertical
+    'Max',      1,...
+    'Min',      0,...
+    'Value',    0,...
+    'sliderstep', [0.1, 1]);
+
 % set the callbacks
 % ~~~~~~~~~~~~~~~~~
 set(handles.menu.load,      'callback', {@fcn_load_eeg});
@@ -131,7 +142,7 @@ set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
 
 set(handles.spike_ax, 'buttondownfcn', {@fcn_time_select});
-
+set(handles.vertical_scroll, 'callback', {@scroll_callback})
 guidata(handles.fig, handles)
 
 % File Loading and Saving
@@ -242,6 +253,7 @@ data        = eegData(EEG.csc_montage.channels(channels,1), range) - eegData(EEG
 [EEG.filter.b, EEG.filter.a] = ...
         butter(2,[EEG.csc_montage.filter_options(1)/(EEG.srate/2),...
                   EEG.csc_montage.filter_options(2)/(EEG.srate/2)]);
+% @TODO firfilt tries to run Octave fn on Matlab
 data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twice
 
 % plot the data
@@ -298,7 +310,10 @@ handles.indicator = line([range(1), range(1)], [0, 1],...
 % set the new parameters
 guidata(handles.fig, handles);
 setappdata(handles.fig, 'EEG', EEG);
-             
+
+function scroll_callback(object, ~)
+  handles = guidata(object);
+  
 
 function fcn_update_axes(object, ~)
 % get the handles structure
