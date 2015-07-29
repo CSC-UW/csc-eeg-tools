@@ -16,6 +16,11 @@ function csc_eeg_plotter()
         %Green line in front of headset
         %headset electrodes smaller due to poor resolution on my computer
 
+% Defaults
+DEF_DISPLAY_CHANNELS = 12;
+DEF_EPOCH_LENGTH = 30;
+DEF_FILTER = [0.5, 30]'; %note transpose
+
 % make a window
 % ~~~~~~~~~~~~~
 handles.fig = figure(...
@@ -58,6 +63,9 @@ handles.name_ax = axes(...
     'position',     [0 0.2, 0.1, 0.75]   ,...
     'visible',      'off');
 
+% Set display channels
+handles.n_disp_chans = DEF_DISPLAY_CHANNELS;
+handles.disp_chans = [1:handles.n_disp_chans];
 
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -190,13 +198,13 @@ end
 % check for previous
 if ~isfield(EEG, 'csc_montage')
     % assign defaults
-    EEG.csc_montage.display_channels    = 12;
-    EEG.csc_montage.epoch_length        = 30;
+    EEG.csc_montage.display_channels    = DEF_DISPLAY_CHANNELS;
+    EEG.csc_montage.epoch_length        = DEF_EPOCH_LENGTH;
     EEG.csc_montage.label_channels      = cell(EEG.csc_montage.display_channels, 1);
     EEG.csc_montage.label_channels(:)   = deal({'undefined'});
     EEG.csc_montage.channels(:,1)       = [1:EEG.csc_montage.display_channels]';
     EEG.csc_montage.channels(:,2)       = size(eegData, 1);
-    EEG.csc_montage.filter_options      = [0.5; 30]';
+    EEG.csc_montage.filter_options      = DEF_FILTER;
 end
     
 % update the handles structure
@@ -244,9 +252,8 @@ eegData = getappdata(handles.fig, 'eegData');
 
 % select the plotting data
 range       = 1:EEG.csc_montage.epoch_length*EEG.srate;
-channels    = 1:EEG.csc_montage.display_channels;
 % TODO: options for original and average reference
-data        = eegData(EEG.csc_montage.channels(channels,1), range) - eegData(EEG.csc_montage.channels(channels,2), range);
+data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range) - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
 
 % filter the data
 % ~~~~~~~~~~~~~~~
@@ -260,13 +267,13 @@ data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose 
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:EEG.csc_montage.display_channels]'*scale;
+toAdd = [1:handles.n_disp_chans]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
 data = data+toAdd;
 
-set([handles.main_ax, handles.name_ax], 'yLim', [scale 0]*(EEG.csc_montage.display_channels+1))
+set([handles.main_ax, handles.name_ax], 'yLim', [scale 0]*(handles.n_disp_chans+1))
 
 % in the case of replotting delete the old handles
 if isfield(handles, 'plot_eeg')
@@ -283,10 +290,11 @@ handles.plot_eeg = line(time, data,...
                         'parent', handles.main_ax);
                   
 % plot the labels in their own boxes
-handles.labels = zeros(length(EEG.csc_montage.label_channels(channels)), 1);
-for chn = 1:length(EEG.csc_montage.label_channels(channels))
-    handles.labels(chn) = ...
-        text(0.5, toAdd(chn,1)+scale/5, EEG.csc_montage.label_channels{chn},...
+handles.labels = zeros(handles.n_disp_chans, 1);
+for i = handles.n_disp_chans
+  chn = handles.disp_chans(i);
+  handles.labels(i) = ...
+        text(0.5, toAdd(i,1)+scale/5, EEG.csc_montage.label_channels{chn},...
         'parent', handles.name_ax,...
         'fontsize',   12,...
         'fontweight', 'bold',...
@@ -327,7 +335,7 @@ eegData = getappdata(handles.fig, 'eegData');
 current_point = get(handles.cPoint, 'value');
 range       = current_point:...
               current_point + EEG.csc_montage.epoch_length * EEG.srate - 1;
-channels    = 1:EEG.csc_montage.display_channels;
+channels    = handles.disp_chans;
 data        = eegData(EEG.csc_montage.channels(channels, 1), range)...
             - eegData(EEG.csc_montage.channels(channels, 2), range);
 
@@ -337,7 +345,7 @@ data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose 
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:EEG.csc_montage.display_channels]'*scale;
+toAdd = [1:handles.n_disp_chans]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
@@ -353,7 +361,7 @@ set(handles.main_ax,  'xlim', [time(1), time(end)]);
 set(handles.plot_eeg, 'xdata', time);
 
 % reset the ydata of each line to represent the new data calculated
-for n = 1:EEG.csc_montage.display_channels
+for n = 1:handles.n_disp_chans
     set(handles.plot_eeg(n), 'ydata', data(n,:));
 end
 
@@ -645,21 +653,38 @@ EEG = getappdata(handles.fig, 'EEG');
 switch type
     case 'disp_chans'
      
-        answer = inputdlg('number of channels',...
-            '', 1, {num2str( EEG.csc_montage.display_channels )});
+        % No answer, no change
+        answer = inputdlg('channels to display (number or range)','', 1);
 
-        % if different from previous
-        if ~isempty(answer)
-            newNumber = str2double(answer{1});
-            if newNumber ~= EEG.csc_montage.display_channels && newNumber <= length(EEG.csc_montage.label_channels); 
-                EEG.csc_montage.display_channels = newNumber;
-                % update the eeg structure before call
-                setappdata(handles.fig, 'EEG', EEG);
-                plot_initial_data(object)
-            else
-                fprintf(1, 'Warning: You requested more channels than available in the montage');
-            end
+        % if no input, do nothing
+        if isempty(answer) || strcmp(answer{1}, '')
+          return
         end
+
+        answer = strsplit(answer{1}, ':'); 
+
+        if length(answer) > 2 %for example '1:2:5' was provided as input
+          fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing.');
+          return
+        end
+
+        if length(answer) == 1 %if a number was provided
+          % if more channels were requested than exist in the montage, take the number in the montage
+          handles.n_disp_chans = min(str2double(answer{1}),...
+                                     length(EEG.csc_montage.label_channels)); 
+          handles.disp_chans = [1:handles.n_disp_chans];
+        else %length(answer) == 2, so a range was provided
+          disp_chans = [str2double(answer{1}:str2double(answer{2}))];
+          if isempty(disp_chans) %if bogus input like '99:12' was provided
+            fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing');
+            return
+          else %input was good
+            handles.disp_chans = disp_chans;
+            handles.n_disp_chans = length(handles.disp_chans);
+          end
+        end
+
+        plot_initial_data(object)
         
     case 'epoch_length'
         
@@ -725,7 +750,7 @@ if isempty(event.Modifier)
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             fcn_update_axes(object)
             
             % update the event lower triangles
@@ -746,7 +771,7 @@ if isempty(event.Modifier)
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(EEG.csc_montage.display_channels+1))
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             fcn_update_axes(object)
             
             % update the event lower triangles
@@ -1059,8 +1084,8 @@ end
 EEG.csc_montage.label_channels  = data(:,1);
 EEG.csc_montage.channels        = cell2mat(data(:,[2,3]));
 
-if length(EEG.csc_montage.label_channels) < EEG.csc_montage.display_channels
-    EEG.csc_montage.display_channels = length(EEG.csc_montage.label_channels);
+if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
+    handles.n_disp_chans = length(EEG.csc_montage.label_channels);
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
