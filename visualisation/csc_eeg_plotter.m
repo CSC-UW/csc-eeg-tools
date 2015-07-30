@@ -127,7 +127,7 @@ handles.vertical_scroll = uicontrol(...
     'Position', [.01, .4, .015, .4],... % height > width specifies vertical
     'Max',      1,...
     'Min',      0,...
-    'Value',    0,...
+    'Value',    1,...
     'sliderstep', [0.1, 1]);
 
 % set the callbacks
@@ -246,7 +246,8 @@ EEG = getappdata(handles.fig, 'EEG');
 eegData = getappdata(handles.fig, 'eegData');
 
 % select the plotting data
-range       = 1:EEG.csc_montage.epoch_length*EEG.srate;
+range       = [handles.cPoint.Value:...
+               handles.cPoint.Value+EEG.csc_montage.epoch_length*EEG.srate-1];
 % TODO: options for original and average reference
 data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range) - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
 
@@ -286,7 +287,7 @@ handles.plot_eeg = line(time, data,...
                   
 % plot the labels in their own boxes
 handles.labels = zeros(handles.n_disp_chans, 1);
-for i = [1:handles.n_disp_chans]
+for i = 1:handles.n_disp_chans
   chn = handles.disp_chans(i);
   handles.labels(i) = ...
         text(0.5, toAdd(i,1)+scale/5, EEG.csc_montage.label_channels{chn},...
@@ -394,7 +395,6 @@ setappdata(handles.fig, 'EEG', EEG);
 
 % update all the axes
 fcn_update_axes(handles.fig);
-
 
 function fcn_hide_channel(object, ~)
 % get the handles from the guidata
@@ -687,7 +687,7 @@ switch type
         end
 
         guidata(object, handles);
-        plot_initial_data(object)
+        plot_initial_data(object);
         
     case 'epoch_length'
         
