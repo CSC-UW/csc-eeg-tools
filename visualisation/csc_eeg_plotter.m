@@ -262,7 +262,7 @@ data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose 
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:handles.n_disp_chans+1]'*scale;
+toAdd = [1:handles.n_disp_chans]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
@@ -286,7 +286,7 @@ handles.plot_eeg = line(time, data,...
                   
 % plot the labels in their own boxes
 handles.labels = zeros(handles.n_disp_chans, 1);
-for i = handles.n_disp_chans
+for i = [1:handles.n_disp_chans]
   chn = handles.disp_chans(i);
   handles.labels(i) = ...
         text(0.5, toAdd(i,1)+scale/5, EEG.csc_montage.label_channels{chn},...
@@ -319,8 +319,8 @@ function scroll_callback(object, ~)
   EEG = getappdata(handles.fig, 'EEG');
   
   val = 1-object.Value;
-  startChan = ceil(val*(length(EEG.csc_montage.label_channels)-handles.n_disp_chans));
-  handles.disp_chans = [startChan:startChan+handles.n_disp_chans];
+  startChan = ceil(val*(length(EEG.csc_montage.label_channels)-handles.n_disp_chans))+1;
+  handles.disp_chans = [startChan:startChan+handles.n_disp_chans-1];
   
   guidata(object, handles);
   plot_initial_data(object);
@@ -347,7 +347,7 @@ data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose 
 % ~~~~~~~~~~~~~
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:handles.n_disp_chans+1]'*scale;
+toAdd = [1:handles.n_disp_chans]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
