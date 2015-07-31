@@ -61,6 +61,9 @@ handles.name_ax = axes(...
 % Set display channels
 handles.n_disp_chans = 12;
 handles.disp_chans = [1:handles.n_disp_chans];
+% Undisplayed channels are off the plot entirely. Hidden channels reserve space
+% on the plot, but are invisible. 
+handles.hidden_chans = [];
 
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -119,17 +122,6 @@ handles.cPoint = uicontrol(...
     'Visible',  'off',...
     'Value',    1);
 
-% vertical scrollbar for selecting display channels
-handles.vertical_scroll = uicontrol(...
-    'Parent',   handles.fig,...
-    'Units',    'normalized',... % MUST PRECEDE 'Position' OPTION! Awful.
-    'Style',    'slider',...
-    'Position', [.01, .4, .015, .4],... % height > width specifies vertical
-    'Max',      1,...
-    'Min',      0,...
-    'Value',    1,...
-    'sliderstep', [0.1, 1]);
-
 % set the callbacks
 % ~~~~~~~~~~~~~~~~~
 set(handles.menu.load,      'callback', {@fcn_load_eeg});
@@ -145,7 +137,7 @@ set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
 
 set(handles.spike_ax, 'buttondownfcn', {@fcn_time_select});
-set(handles.vertical_scroll, 'callback', {@scroll_callback})
+%set(handles.vertical_scroll, 'callback', {@scroll_callback})
 guidata(handles.fig, handles)
 
 % File Loading and Saving
@@ -212,7 +204,7 @@ setappdata(handles.fig, 'eegData', eegData);
 set(handles.menu.montage, 'enable', 'on');
 
 % plot the initial data
-plot_initial_data(handles.fig)
+update_main_plot(handles.fig)
 
 % redraw event triangles if present
 if isfield(EEG, 'csc_event_data')
@@ -236,8 +228,7 @@ EEG.csc_event_data = fcn_compute_events(handles);
 % since the data has not changed we can just save the EEG part, not the data
 save(fullfile(savePath, saveFile), 'EEG', '-mat');
 
-
-function plot_initial_data(object)
+function update_main_plot(object)
 % get the handles structure
 handles = guidata(object);
 
@@ -246,10 +237,12 @@ EEG = getappdata(handles.fig, 'EEG');
 eegData = getappdata(handles.fig, 'eegData');
 
 % select the plotting data
-range       = [handles.cPoint.Value:...
-               handles.cPoint.Value+EEG.csc_montage.epoch_length*EEG.srate-1];
+current_point = get(handles.cPoint, 'value');
+range       = [current_point:...
+               current_point+EEG.csc_montage.epoch_length*EEG.srate-1];
 % TODO: options for original and average reference
-data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range) - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
+data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range)...
+            - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
 
 % filter the data
 % ~~~~~~~~~~~~~~~
@@ -285,6 +278,12 @@ handles.plot_eeg = line(time, data,...
                         'color', [0.9, 0.9, 0.9],...
                         'parent', handles.main_ax);
                   
+% Get indices of channels to hide
+hidden_idx = find(ismember(handles.disp_chans, handles.hidden_chans));
+% Now hide them
+set(handles.plot_eeg(hidden_idx), 'visible', 'off');
+
+
 % plot the labels in their own boxes
 handles.labels = zeros(handles.n_disp_chans, 1);
 for i = 1:handles.n_disp_chans
@@ -297,7 +296,7 @@ for i = 1:handles.n_disp_chans
         'color',      [0.8, 0.8, 0.8],...
         'backgroundcolor', [0.1 0.1 0.1],...
         'horizontalAlignment', 'center',...
-        'buttondownfcn', {@fcn_hide_channel});
+        'buttondownfcn', {@fcn_toggle_channel});
 end
                     
 % change the x limits of the indicator plot
@@ -324,49 +323,7 @@ function scroll_callback(object, ~)
   handles.disp_chans = [startChan:startChan+handles.n_disp_chans-1];
   
   guidata(object, handles);
-  plot_initial_data(object);
-
-function fcn_update_axes(object, ~)
-% get the handles structure
-handles = guidata(object);
-
-% get the data
-EEG = getappdata(handles.fig, 'EEG');
-eegData = getappdata(handles.fig, 'eegData');
-        
-% select the plotting data
-current_point = get(handles.cPoint, 'value');
-range       = current_point:...
-              current_point + EEG.csc_montage.epoch_length * EEG.srate - 1;
-channels    = handles.disp_chans;
-data        = eegData(EEG.csc_montage.channels(channels, 1), range)...
-            - eegData(EEG.csc_montage.channels(channels, 2), range);
-
-data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twice
-
-% plot the data
-% ~~~~~~~~~~~~~
-% define accurate spacing
-scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:handles.n_disp_chans]'*scale;
-toAdd = repmat(toAdd, [1, length(range)]);
-
-% space out the data for the single plot
-data = data+toAdd;
-
-% calculate the time in seconds corresponding to the range in samples
-time = range/EEG.srate;
-
-% set the xlimits explicitely just in case matlab decides to give space
-set(handles.main_ax,  'xlim', [time(1), time(end)]);
-
-% set the x-axis to the time in seconds
-set(handles.plot_eeg, 'xdata', time);
-
-% reset the ydata of each line to represent the new data calculated
-for n = 1:handles.n_disp_chans
-    set(handles.plot_eeg(n), 'ydata', data(n,:));
-end
+  update_main_plot(object);
 
 
 function fcn_change_time(object, ~)
@@ -394,9 +351,9 @@ guidata(handles.fig, handles)
 setappdata(handles.fig, 'EEG', EEG);
 
 % update all the axes
-fcn_update_axes(handles.fig);
+update_main_plot(handles.fig);
 
-function fcn_hide_channel(object, ~)
+function fcn_toggle_channel(object, ~)
 % get the handles from the guidata
 handles = guidata(object);
 
@@ -408,10 +365,13 @@ state = get(handles.plot_eeg(ch), 'visible');
 
 switch state
     case 'on'
-        set(handles.plot_eeg(ch), 'visible', 'off');
+      set(handles.plot_eeg(ch), 'visible', 'off');
+      handles.hidden_chans = [handles.hidden_chans ch]; % save state
     case 'off'
-        set(handles.plot_eeg(ch), 'visible', 'on');
+      set(handles.plot_eeg(ch), 'visible', 'on');
+      handles.hidden_chans = handles.hidden_chans(handles.hidden_chans ~= ch);
 end
+guidata(object, handles);
 
 
 function fcn_time_select(object, ~)
@@ -685,9 +645,23 @@ switch type
             handles.n_disp_chans = length(handles.disp_chans);
           end
         end
+        
+        total_chans = length(EEG.csc_montage.label_channels);
+        % vertical scrollbar for selecting display channels
+        handles.vertical_scroll = uicontrol(...
+            'Parent',   handles.fig,...
+            'Units',    'normalized',... % MUST PRECEDE 'Position' OPTION! Awful.
+            'Style',    'slider',...
+            'Position', [.01, .4, .015, .4],... % height > width specifies vertical
+            'Max',      1,...
+            'Min',      0,...
+            'Value',    1-(handles.disp_chans(1)/(total_chans-handles.n_disp_chans+1)),...
+            'sliderstep', [1/length(EEG.csc_montage.label_channels),...
+                           handles.n_disp_chans/length(EEG.csc_montage.label_channels)],...
+            'callback', @scroll_callback);
 
         guidata(object, handles);
-        plot_initial_data(object);
+        update_main_plot(object);
         
     case 'epoch_length'
         
@@ -701,7 +675,7 @@ switch type
                 EEG.csc_montage.epoch_length = newNumber;
                 % update the eeg structure before call
                 setappdata(handles.fig, 'EEG', EEG);
-                plot_initial_data(object)
+                update_main_plot(object)
             end
         end
         
@@ -717,7 +691,7 @@ switch type
             EEG.csc_montage.filter_options = new_values;
             % update the eeg structure before call
             setappdata(handles.fig, 'EEG', EEG);
-            fcn_update_axes(object, []);
+            update_main_plot(object);
         end
             
 end
@@ -754,13 +728,15 @@ if isempty(event.Modifier)
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
-            fcn_update_axes(object)
+            update_main_plot(object)
             
-            % update the event lower triangles
-            y_limits = get(handles.main_ax, 'ylim');
-            relevant_handles = cell2mat(handles.events);
-            relevant_handles = relevant_handles(:,1); 
-            set(relevant_handles, 'ydata', y_limits(1))
+            if isfield(handles, 'events')
+                % update the event lower triangles
+                y_limits = get(handles.main_ax, 'ylim');
+                relevant_handles = cell2mat(handles.events);
+                relevant_handles = relevant_handles(:,1); 
+                set(relevant_handles, 'ydata', y_limits(1))
+            end
             
             
         case 'downarrow'
@@ -775,13 +751,15 @@ if isempty(event.Modifier)
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
-            fcn_update_axes(object)
+            update_main_plot(object)
             
-            % update the event lower triangles
-            y_limits = get(handles.main_ax, 'ylim');
-            relevant_handles = cell2mat(handles.events);
-            relevant_handles = relevant_handles(:,1); 
-            set(relevant_handles, 'ydata', y_limits(1))
+            if isfield(handles, 'events')
+                % update the event lower triangles
+                y_limits = get(handles.main_ax, 'ylim');
+                relevant_handles = cell2mat(handles.events);
+                relevant_handles = relevant_handles(:,1); 
+                set(relevant_handles, 'ydata', y_limits(1))
+            end
     end
 
 % check whether the ctrl is pressed also
@@ -1092,10 +1070,23 @@ if length(EEG.csc_montage.label_channels) < handles.csc_plotter.n_disp_chans
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
+% vertical scrollbar for selecting display channels
+handles.vertical_scroll = uicontrol(...
+    'Parent',   handles.csc_plotter.fig,...
+    'Units',    'normalized',... % MUST PRECEDE 'Position' OPTION! Awful.
+    'Style',    'slider',...
+    'Position', [.01, .4, .015, .4],... % height > width specifies vertical
+    'Max',      1,...
+    'Min',      0,...
+    'Value',    1,...
+    'sliderstep', [1/length(EEG.csc_montage.label_channels),...
+                   handles.csc_plotter.n_disp_chans/length(EEG.csc_montage.label_channels)],...
+    'callback', @scroll_callback);
+
 guidata(handles.fig, handles);
 setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
-plot_initial_data(handles.csc_plotter.fig);
+update_main_plot(handles.csc_plotter.fig);
 
 
 function fcn_select_montage(object, ~)
