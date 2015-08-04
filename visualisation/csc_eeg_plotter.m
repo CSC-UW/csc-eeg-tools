@@ -64,6 +64,8 @@ handles.disp_chans = [1:handles.n_disp_chans];
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
 % on the plot, but are invisible. 
 handles.hidden_chans = [];
+% Plot normal time courses instead of component time courses by default
+handles.plotICA = 0;
 
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -103,6 +105,9 @@ handles.menu.epoch_length = uimenu(handles.menu.options,...
 handles.menu.filter_settings = uimenu(handles.menu.options,...
     'label', 'filter settings',...
     'accelerator', 'f');
+handles.menu.icatoggle = uimenu(handles.menu.options,...
+    'label', 'toggle components/channels',...
+    'accelerator', 't');
 
 % scale indicator
 % ~~~~~~~~~~~~~~~
@@ -132,6 +137,7 @@ set(handles.menu.events,    'callback', {@fcn_event_browser});
 set(handles.menu.disp_chans,   'callback', {@fcn_options, 'disp_chans'});
 set(handles.menu.epoch_length, 'callback', {@fcn_options, 'epoch_length'});
 set(handles.menu.filter_settings, 'callback', {@fcn_options, 'filter_settings'});
+set(handles.menu.icatoggle,    'callback', {@fcn_options, 'icatoggle'});
 
 set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
@@ -185,15 +191,22 @@ end
 % check for previous
 if ~isfield(EEG, 'csc_montage')
     % assign defaults
-    EEG.csc_montage.display_channels    = 12;
+    EEG.csc_montage.display_channels    = EEG.nbchan;
     EEG.csc_montage.epoch_length        = 30;
     EEG.csc_montage.label_channels      = cell(EEG.csc_montage.display_channels, 1);
-    EEG.csc_montage.label_channels(:)   = deal({'undefined'});
+    for i=1:EEG.nbchan
+      EEG.csc_montage.label_channels(i) = {num2str(i)};
+    end
     EEG.csc_montage.channels(:,1)       = [1:EEG.csc_montage.display_channels]';
     EEG.csc_montage.channels(:,2)       = size(eegData, 1);
     EEG.csc_montage.filter_options      = [0.3, 40];
 end
-    
+
+% load ICA time courses if the information need to construct them is available.
+if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
+  icaData = EEG.icaweights*EEG.icasphere*eegData;
+  setappdata(handles.fig, 'icaData', icaData);
+end
 % update the handles structure
 guidata(handles.fig, handles)
 % use setappdata for data storage to avoid passing it around in handles when not necessary
@@ -234,24 +247,28 @@ handles = guidata(object);
 
 % get the data
 EEG = getappdata(handles.fig, 'EEG');
-eegData = getappdata(handles.fig, 'eegData');
 
 % select the plotting data
 current_point = get(handles.cPoint, 'value');
 range       = [current_point:...
                current_point+EEG.csc_montage.epoch_length*EEG.srate-1];
 % TODO: options for original and average reference
-data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range)...
-            - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
-
-% filter the data
-% ~~~~~~~~~~~~~~~
-[EEG.filter.b, EEG.filter.a] = ...
-        butter(2,[EEG.csc_montage.filter_options(1)/(EEG.srate/2),...
-                  EEG.csc_montage.filter_options(2)/(EEG.srate/2)]);
-% @TODO firfilt tries to run Octave fn on Matlab
-data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twice
-
+if handles.plotICA == 1
+  icaData = getappdata(handles.fig, 'icaData');
+  data        = icaData(EEG.csc_montage.channels(handles.disp_chans,1),range)...
+              - icaData(EEG.csc_montage.channels(handles.disp_chans,2),range);
+else
+  eegData = getappdata(handles.fig, 'eegData');
+  data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range)...
+              - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
+  % filter the data
+  % ~~~~~~~~~~~~~~~
+  [EEG.filter.b, EEG.filter.a] = ...
+          butter(2,[EEG.csc_montage.filter_options(1)/(EEG.srate/2),...
+                    EEG.csc_montage.filter_options(2)/(EEG.srate/2)]);
+  % @TODO firfilt tries to run Octave fn on Matlab
+  data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twicev
+end
 % plot the data
 % ~~~~~~~~~~~~~
 % define accurate spacing
@@ -300,7 +317,7 @@ for i = 1:handles.n_disp_chans
 end
                     
 % change the x limits of the indicator plot
-set(handles.spike_ax,   'xlim', [0, size(eegData, 2)],...
+set(handles.spike_ax,   'xlim', [0, EEG.pnts],...
                         'ylim', [0, 1]);
                     
 % add indicator line to lower plot
@@ -693,6 +710,27 @@ switch type
             setappdata(handles.fig, 'EEG', EEG);
             update_main_plot(object);
         end
+    
+    case 'icatoggle'
+
+        answer = questdlg('What would you like to display?',...
+                          'Show/hide ICA time courses',...
+                          'Channel activations',...
+                          'ICA component activations',...
+                          'Channel activations');
+        if isempty(answer)
+          return
+        end
+
+        if strcmp(answer, 'Channel activations')
+          handles.plotICA = 0;
+        end
+
+        if strcmp(answer, 'ICA component activations')
+          handles.plotICA = 1;
+        end
+        guidata(object, handles);
+        update_main_plot(object);
             
 end
 
