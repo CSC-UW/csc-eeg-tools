@@ -1,4 +1,4 @@
-function csc_eeg_plotter()
+function csc_eeg_plotter(varargin)
 
 %TODO: Main page 
         %Scale - green lines across one of the channels
@@ -21,6 +21,7 @@ N_DISP_CHANS = 12;
 PLOT_ICA = 0;
 EPOCH_LENGTH = 30;
 PLOT_GRID = 1;
+FILTER_OPTIONS = [0.3 40];
 
 % make a window
 % ~~~~~~~~~~~~~
@@ -64,6 +65,7 @@ handles.name_ax = axes(...
     'position',     [0 0.2, 0.1, 0.75]   ,...
     'visible',      'off');
 
+handles.filter_options = FILTER_OPTIONS;
 handles.epoch_length = EPOCH_LENGTH;
 handles.plot_grid = PLOT_GRID;
 
@@ -75,7 +77,7 @@ handles.disp_chans = [1:handles.n_disp_chans];
 handles.hidden_chans = [];
 % Plot normal time courses instead of component time courses by default
 handles.plotICA = PLOT_ICA;
-
+   
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 handles.selection.menu = uicontextmenu;
@@ -155,6 +157,21 @@ set(handles.spike_ax, 'buttondownfcn', {@fcn_time_select});
 %set(handles.vertical_scroll, 'callback', {@scroll_callback})
 guidata(handles.fig, handles)
 
+
+% If passed an eeg struct, use that. Otherwise, wait for user to load a file. 
+switch nargin
+  case 0
+    ; %do nothing
+  case 1
+    EEG = varargin{1};
+    EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
+    setappdata(handles.fig, 'EEG', EEG);
+    setappdata(handles.fig, 'eegData', EEG.data);
+    update_main_plot(handles.fig);
+  otherwise
+    error('Either 0 or 1 arguments expected.');
+end
+ 
 % File Loading and Saving
 % ^^^^^^^^^^^^^^^^^^^^^^^
 function fcn_load_eeg(object, ~)
@@ -184,40 +201,10 @@ tmp = memmapfile([dataPath EEG.data],...
                 'Format', {'single', [EEG.nbchan EEG.pnts EEG.trials], 'eegData'});
 eegData = tmp.Data.eegData;
 
+EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
+
 % set the name
 set(handles.fig, 'name', ['csc: ', dataFile]);
-
-% check for the channel locations
-if isempty(EEG.chanlocs)
-    if isempty(EEG.urchanlocs)
-        fprintf(1, 'Warning: No channel locations found in the EEG structure \n');
-    else
-        fprintf(1, 'Information: Taking the EEG.urchanlocs as the channel locations \n');
-        EEG.chanlocs = EEG.urchanlocs;
-    end
-end
-
-% check for previous
-if ~isfield(EEG, 'csc_montage')
-    % assign defaults
-    EEG.csc_montage.display_channels    = EEG.nbchan;
-    EEG.csc_montage.epoch_length        = 30;
-    EEG.csc_montage.label_channels      = cell(EEG.csc_montage.display_channels, 1);
-    for i=1:EEG.nbchan
-      EEG.csc_montage.label_channels(i) = {num2str(i)};
-    end
-    EEG.csc_montage.channels(:,1)       = [1:EEG.csc_montage.display_channels]';
-    EEG.csc_montage.channels(:,2)       = size(eegData, 1);
-    EEG.csc_montage.filter_options      = [0.3, 40];
-end
-
-% load ICA time courses if the information need to construct them is available.
-if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
-  if ~isempty(EEG.icaweights) && ~isempty(EEG.icasphere)
-    icaData = EEG.icaweights*EEG.icasphere*eegData;
-    setappdata(handles.fig, 'icaData', icaData);
-  end
-end
 % update the handles structure
 guidata(handles.fig, handles)
 % use setappdata for data storage to avoid passing it around in handles when not necessary
@@ -262,7 +249,7 @@ EEG = getappdata(handles.fig, 'EEG');
 % select the plotting data
 current_point = get(handles.cPoint, 'value');
 range       = [current_point:...
-               current_point+EEG.csc_montage.epoch_length*EEG.srate-1];
+               current_point+handles.epoch_length*EEG.srate-1];
 % TODO: options for original and average reference
 if handles.plotICA == 1
   icaData = getappdata(handles.fig, 'icaData');
@@ -275,8 +262,8 @@ else
   % filter the data
   % ~~~~~~~~~~~~~~~
   [EEG.filter.b, EEG.filter.a] = ...
-          butter(2,[EEG.csc_montage.filter_options(1)/(EEG.srate/2),...
-                    EEG.csc_montage.filter_options(2)/(EEG.srate/2)]);
+          butter(2,[handles.filter_options(1)/(EEG.srate/2),...
+                    handles.filter_options(2)/(EEG.srate/2)]);
   % @TODO firfilt tries to run Octave fn on Matlab
   data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twicev
 end
@@ -378,10 +365,10 @@ current_point = get(handles.cPoint, 'value');
 if current_point < 1
     fprintf(1, 'This is the first sample \n');
     set(handles.cPoint, 'value', 1);
-elseif current_point > EEG.pnts - EEG.csc_montage.epoch_length * EEG.srate
+elseif current_point > EEG.pnts - handles.epoch_length * EEG.srate
     fprintf(1, 'No more data \n');
     set(handles.cPoint,...
-        'value', EEG.pnts - EEG.csc_montage.epoch_length * EEG.srate );
+        'value', EEG.pnts - handles.epoch_length * EEG.srate );
 end
 current_point = get(handles.cPoint, 'value');
 
@@ -535,7 +522,7 @@ table_data = get(object, 'data');
 
 % retrieve the time from the table
 selected_time = table_data{event_data.Indices(1), 2};
-go_to_time = selected_time - EEG.csc_montage.epoch_length/2;
+go_to_time = selected_time - handles.epoch_length/2;
 selected_sample = floor(go_to_time * EEG.srate);
 
 % change the hidden time keeper
@@ -708,16 +695,15 @@ switch type
     case 'epoch_length'
         
         answer = inputdlg('length of epoch',...
-            '', 1, {num2str( EEG.csc_montage.epoch_length )});
+            '', 1, {num2str( handles.epoch_length )});
         
         % if different from previous
         if ~isempty(answer)
             newNumber = str2double(answer{1});
-            if newNumber ~= EEG.csc_montage.epoch_length 
-                EEG.csc_montage.epoch_length = newNumber;
+            if newNumber ~= handles.epoch_length 
+                handles.epoch_length = newNumber;
 
-                % update the eeg structure before call
-                setappdata(handles.fig, 'EEG', EEG);
+                guidata(object, handles);
                 update_main_plot(object)
             end
         end
@@ -725,15 +711,14 @@ switch type
     case 'filter_settings'
         
         answer = inputdlg({'low cut-off', 'high cut-off'},...
-            '', 1, {num2str( EEG.csc_montage.filter_options(1)),...
-                    num2str( EEG.csc_montage.filter_options(2))});
+            '', 1, {num2str( handles.filter_options(1)),...
+                    num2str( handles.filter_options(2))});
         
         % get and set the new values
         new_values = str2double(answer);
-        if ~isequal(new_values, EEG.csc_montage.filter_options')
-            EEG.csc_montage.filter_options = new_values;
-            % update the eeg structure before call
-            setappdata(handles.fig, 'EEG', EEG);
+        if ~isequal(new_values, handles.filter_options')
+            handles.filter_options = new_values;
+            guidata(object, handles);
             update_main_plot(object);
         end
     
@@ -753,7 +738,11 @@ switch type
         end
 
         if strcmp(answer, 'ICA component activations')
-          handles.plotICA = 1;
+          if isempty(getappdata(handles.fig, 'icaData'))
+            warning('No ICA data found. Doing nothing\n');
+          else
+            handles.plotICA = 1;
+          end
         end
         guidata(object, handles);
         update_main_plot(object);
@@ -771,13 +760,13 @@ if isempty(event.Modifier)
         case 'leftarrow'
             % move to the previous epoch
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length*EEG.srate);
+                get(handles.cPoint, 'Value') - handles.epoch_length*EEG.srate);
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move to the next epoch
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length*EEG.srate);
+                get(handles.cPoint, 'Value') + handles.epoch_length*EEG.srate);
             fcn_change_time(object, [])
             
         case 'uparrow'
@@ -845,13 +834,13 @@ elseif strcmp(event.Modifier, 'control')
         case 'leftarrow'
             % move a little to the left
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - EEG.csc_montage.epoch_length/5 * EEG.srate);
+                get(handles.cPoint, 'Value') - handles.epoch_length/5 * EEG.srate);
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move a little to the right
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + EEG.csc_montage.epoch_length/5 * EEG.srate);
+                get(handles.cPoint, 'Value') + handles.epoch_length/5 * EEG.srate);
             fcn_change_time(object, [])
     end
     
@@ -1233,4 +1222,40 @@ new_index = find(strcmp(fileName, montage_list));
 set(handles.montage_list,...
     'string', montage_list,...
     'value', new_index);
+
+% This function does NOT save changes the eegMeta or eegData objects. YOU must
+% do that using the return. 
+function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
+  handles = guidata(object);
+
+  % check for the channel locations
+  if isempty(eegMeta.chanlocs)
+      if isempty(eegMeta.urchanlocs)
+          fprintf(1, 'Warning: No channel locations found in the eegMeta structure \n');
+      else
+          fprintf(1, 'Information: Taking the EEG.urchanlocs as the channel locations \n');
+          eegMeta.chanlocs = eegMeta.urchanlocs;
+      end
+  end
+
+  % check for previous
+  if ~isfield(eegMeta, 'csc_montage')
+      % assign defaults
+      eegMeta.csc_montage.label_channels      = cell(eegMeta.nbchan, 1);
+      for i=1:eegMeta.nbchan
+        eegMeta.csc_montage.label_channels(i) = {num2str(i)};
+      end
+      eegMeta.csc_montage.channels(:,1)       = [1:eegMeta.nbchan]';
+      eegMeta.csc_montage.channels(:,2)       = eegMeta.nbchan;
+  end
+
+  % load ICA time courses if the information need to construct them is available.
+  if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
+    if ~isempty(eegMeta.icaweights) && ~isempty(eegMeta.icasphere)
+      icaData = eegMeta.icaweights*eegMeta.icasphere*eegData;
+      setappdata(handles.fig, 'icaData', icaData);
+    end
+  end
+
+  return
 
