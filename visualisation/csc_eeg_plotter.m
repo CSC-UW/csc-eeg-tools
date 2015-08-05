@@ -16,6 +16,12 @@ function csc_eeg_plotter()
         %Green line in front of headset
         %headset electrodes smaller due to poor resolution on my computer
 
+% declare defaults
+N_DISP_CHANS = 12;
+PLOT_ICA = 0;
+EPOCH_LENGTH = 30;
+PLOT_GRID = 1;
+
 % make a window
 % ~~~~~~~~~~~~~
 handles.fig = figure(...
@@ -58,14 +64,17 @@ handles.name_ax = axes(...
     'position',     [0 0.2, 0.1, 0.75]   ,...
     'visible',      'off');
 
+handles.epoch_length = EPOCH_LENGTH;
+handles.plot_grid = PLOT_GRID;
+
 % Set display channels
-handles.n_disp_chans = 12;
+handles.n_disp_chans = N_DISP_CHANS;
 handles.disp_chans = [1:handles.n_disp_chans];
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
 % on the plot, but are invisible. 
 handles.hidden_chans = [];
 % Plot normal time courses instead of component time courses by default
-handles.plotICA = 0;
+handles.plotICA = PLOT_ICA;
 
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -204,8 +213,10 @@ end
 
 % load ICA time courses if the information need to construct them is available.
 if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
-  icaData = EEG.icaweights*EEG.icasphere*eegData;
-  setappdata(handles.fig, 'icaData', icaData);
+  if ~isempty(EEG.icaweights) && ~isempty(EEG.icasphere)
+    icaData = EEG.icaweights*EEG.icasphere*eegData;
+    setappdata(handles.fig, 'icaData', icaData);
+  end
 end
 % update the handles structure
 guidata(handles.fig, handles)
@@ -217,7 +228,7 @@ setappdata(handles.fig, 'eegData', eegData);
 set(handles.menu.montage, 'enable', 'on');
 
 % plot the initial data
-update_main_plot(handles.fig)
+update_main_plot(handles.fig);
 
 % redraw event triangles if present
 if isfield(EEG, 'csc_event_data')
@@ -287,6 +298,9 @@ if isfield(handles, 'plot_eeg')
     delete(handles.labels);
     delete(handles.indicator);
 end
+if isfield(handles, 'gridlines')
+    delete(handles.gridlines);
+end
 
 % calculate the time in seconds
 time = range/EEG.srate;
@@ -294,7 +308,18 @@ set(handles.main_ax,  'xlim', [time(1), time(end)]);
 handles.plot_eeg = line(time, data,...
                         'color', [0.9, 0.9, 0.9],...
                         'parent', handles.main_ax);
-                  
+% plot gridlines
+if handles.plot_grid
+  inttimes = time(~mod(time, 1)); % find all integer times
+  gridtimes = repmat(inttimes, 2, 1);
+  ylims = get(handles.main_ax, 'ylim');
+  gridlims = repmat(ylims, length(gridtimes), 1)';
+  handles.gridlines = line(gridtimes, gridlims,...
+      'LineStyle',  ':',...
+      'Color',      [0.6 0.6 0.6],...
+      'Parent',     handles.main_ax);
+end
+
 % Get indices of channels to hide
 hidden_idx = find(ismember(handles.disp_chans, handles.hidden_chans));
 % Now hide them
@@ -690,6 +715,7 @@ switch type
             newNumber = str2double(answer{1});
             if newNumber ~= EEG.csc_montage.epoch_length 
                 EEG.csc_montage.epoch_length = newNumber;
+
                 % update the eeg structure before call
                 setappdata(handles.fig, 'EEG', EEG);
                 update_main_plot(object)
@@ -798,6 +824,12 @@ if isempty(event.Modifier)
                 relevant_handles = relevant_handles(:,1); 
                 set(relevant_handles, 'ydata', y_limits(1))
             end
+
+        case 'g'
+          handles.plot_grid = ~handles.plot_grid;
+          guidata(object, handles);
+          update_main_plot(object);
+
     end
 
 % check whether the ctrl is pressed also
@@ -1201,3 +1233,4 @@ new_index = find(strcmp(fileName, montage_list));
 set(handles.montage_list,...
     'string', montage_list,...
     'value', new_index);
+
