@@ -739,7 +739,7 @@ switch type
 
         if strcmp(answer, 'ICA component activations')
           if isempty(getappdata(handles.fig, 'icaData'))
-            warning('No ICA data found. Doing nothing\n');
+            warning('No ICA data found. Doing nothing');
           else
             handles.plotICA = 1;
           end
@@ -1252,8 +1252,10 @@ function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
   % load ICA time courses if the information need to construct them is available.
   if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
     if ~isempty(eegMeta.icaweights) && ~isempty(eegMeta.icasphere)
-      icaData = eegMeta.icaweights*eegMeta.icasphere*eegData;
-      setappdata(handles.fig, 'icaData', icaData);
+      if size(eegMeta.icaweights, 1) == size(eegData, 1)
+          icaData = eegMeta.icaweights*eegMeta.icasphere*eegData;
+          setappdata(handles.fig, 'icaData', icaData);
+      end
     end
   end
 
