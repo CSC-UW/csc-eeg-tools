@@ -1126,6 +1126,7 @@ EEG.csc_montage.channels        = cell2mat(data(:,[2,3]));
 
 if length(EEG.csc_montage.label_channels) < handles.csc_plotter.n_disp_chans
     handles.csc_plotter.n_disp_chans = length(EEG.csc_montage.label_channels);
+    handles.csc_plotter.disp_chans = [1:handles.csc_plotter.n_disp_chans];
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
@@ -1143,6 +1144,7 @@ handles.vertical_scroll = uicontrol(...
     'callback', @scroll_callback);
 
 guidata(handles.fig, handles);
+guidata(handles.csc_plotter.fig, handles.csc_plotter);
 setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 update_main_plot(handles.csc_plotter.fig);
