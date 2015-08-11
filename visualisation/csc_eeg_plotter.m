@@ -387,18 +387,20 @@ function fcn_toggle_channel(object, ~)
 % get the handles from the guidata
 handles = guidata(object);
 
-% find the indice of the selected channel
-ch = find(handles.labels == object);
+% find which of the n_disp_chans possible plot lines the selected channel is
+i = find(handles.labels == object);
+% find which channel this corresponds to
+ch = handles.disp_chans(i);
 
 % get its current state ('on' or 'off')
-state = get(handles.plot_eeg(ch), 'visible');
+state = get(handles.plot_eeg(i), 'visible');
 
 switch state
     case 'on'
-      set(handles.plot_eeg(ch), 'visible', 'off');
+      set(handles.plot_eeg(i), 'visible', 'off');
       handles.hidden_chans = [handles.hidden_chans ch]; % save state
     case 'off'
-      set(handles.plot_eeg(ch), 'visible', 'on');
+      set(handles.plot_eeg(i), 'visible', 'on');
       handles.hidden_chans = handles.hidden_chans(handles.hidden_chans ~= ch);
 end
 guidata(object, handles);
@@ -1144,6 +1146,9 @@ handles.vertical_scroll = uicontrol(...
                    handles.csc_plotter.n_disp_chans/length(EEG.csc_montage.label_channels)],...
     'callback', @scroll_callback);
 
+% Reset hidden channels
+handles.csc_plotter.hidden_chans = [];
+
 guidata(handles.fig, handles);
 guidata(handles.csc_plotter.fig, handles.csc_plotter);
 setappdata(handles.csc_plotter.fig, 'EEG', EEG);
@@ -1261,6 +1266,7 @@ function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
       end
     end
   end
-
+  % turn on the montage option
+  set(handles.menu.montage, 'enable', 'on');
   return
 
