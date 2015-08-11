@@ -252,10 +252,11 @@ range       = [current_point:...
                current_point+handles.epoch_length*EEG.srate-1];
 % TODO: options for original and average reference
 if handles.plotICA == 1
+  title(handles.main_ax, 'Component Activations', 'Color', 'w');
   icaData = getappdata(handles.fig, 'icaData');
-  data        = icaData(EEG.csc_montage.channels(handles.disp_chans,1),range)...
-              - icaData(EEG.csc_montage.channels(handles.disp_chans,2),range);
+  data        = icaData(EEG.csc_montage.channels(handles.disp_chans,1),range);
 else
+  title(handles.main_ax, 'Channel Activations', 'Color', 'w');
   eegData = getappdata(handles.fig, 'eegData');
   data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range)...
               - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
