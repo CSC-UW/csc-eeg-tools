@@ -119,6 +119,9 @@ handles.menu.filter_settings = uimenu(handles.menu.options,...
 handles.menu.icatoggle = uimenu(handles.menu.options,...
     'label', 'toggle components/channels',...
     'accelerator', 't');
+handles.menu.export_hidden_chans = uimenu(handles.menu.options,...
+    'label', 'export hidden channels',...
+    'accelerator', 'x');
 
 % scale indicator
 % ~~~~~~~~~~~~~~~
@@ -149,6 +152,8 @@ set(handles.menu.disp_chans,   'callback', {@fcn_options, 'disp_chans'});
 set(handles.menu.epoch_length, 'callback', {@fcn_options, 'epoch_length'});
 set(handles.menu.filter_settings, 'callback', {@fcn_options, 'filter_settings'});
 set(handles.menu.icatoggle,    'callback', {@fcn_options, 'icatoggle'});
+set(handles.menu.export_hidden_chans, 'callback',...
+    {@fcn_options, 'export_hidden_chans'});
 
 set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
@@ -750,6 +755,26 @@ switch type
         guidata(object, handles);
         update_main_plot(object);
             
+    case 'export_hidden_chans'
+      
+      var_name = inputdlg('Workspace variable to export to?',...
+                        '', 1, {'hidden_chans'});
+      var_name = var_name{1} % *sigh*
+      eval_str = sprintf('exist(''%s'')', var_name); % will check if var exists
+      if(evalin('base', eval_str)) % If variable already exists
+        warning_msg = ['A variable with thise name already exists in your '...
+        'workspace. Are you sure you want to overwrite it?'];
+        answer = questdlg(warning_msg);
+        if ~strcmp(answer, 'Yes')
+          return
+        end
+      end
+      labels = EEG.csc_montage.label_channels(handles.hidden_chans);
+      refs = EEG.csc_montage.channels(handles.hidden_chans, :);
+      refs = mat2cell(refs, ones(length(handles.hidden_chans), 1), ones(2, 1)); 
+      selected_channels = [labels refs];
+      assignin('base', var_name, selected_channels);
+
 end
 
 function cb_key_pressed(object, event)
