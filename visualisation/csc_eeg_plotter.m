@@ -1285,9 +1285,21 @@ function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
   % load ICA time courses if the information need to construct them is available.
   if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
     if ~isempty(eegMeta.icaweights) && ~isempty(eegMeta.icasphere)
+      % If we have the same number of components as channels...
       if size(eegMeta.icaweights, 1) == size(eegData, 1)
           icaData = eegMeta.icaweights*eegMeta.icasphere*eegData;
           setappdata(handles.fig, 'icaData', icaData);
+      % If we have fewer components than channels (maybe you've already removed
+      % some of them), then pad the ICA weights with zeros and produce component
+      % activations as if you had the same number of components as channels. 
+      elseif size(eegMeta.icaweights, 1) < size(eegData,1)
+        dimdiff = size(eegData, 1) - size(eegMeta.icaweights, 1);
+        pad = zeros(dimdiff, size(eegMeta.icaweights, 2));
+        paddedweights = [eegMeta.icaweights ; pad];
+        icaData = paddedweights*eegMeta.icasphere*eegData;
+        setappdata(handles.fig, 'icaData', icaData);
+      else
+        error('ICA unmixing matrix is too large for data');
       end
     end
   end
