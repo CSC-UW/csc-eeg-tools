@@ -23,6 +23,15 @@ EPOCH_LENGTH = 30;
 PLOT_GRID = 1;
 FILTER_OPTIONS = [0.3 40];
 
+% Set display channels
+handles.n_disp_chans = N_DISP_CHANS;
+handles.disp_chans = [1 : handles.n_disp_chans];
+% Undisplayed channels are off the plot entirely. Hidden channels reserve space
+% on the plot, but are invisible. 
+handles.hidden_chans = [];
+% Plot normal time courses instead of component time courses by default
+handles.plotICA = PLOT_ICA;
+
 % make a window
 % ~~~~~~~~~~~~~
 handles.fig = figure(...
@@ -69,15 +78,6 @@ handles.filter_options = FILTER_OPTIONS;
 handles.epoch_length = EPOCH_LENGTH;
 handles.plot_grid = PLOT_GRID;
 
-% Set display channels
-handles.n_disp_chans = N_DISP_CHANS;
-handles.disp_chans = [1:handles.n_disp_chans];
-% Undisplayed channels are off the plot entirely. Hidden channels reserve space
-% on the plot, but are invisible. 
-handles.hidden_chans = [];
-% Plot normal time courses instead of component time courses by default
-handles.plotICA = PLOT_ICA;
-   
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 handles.selection.menu = uicontextmenu;
@@ -90,7 +90,6 @@ for n = 1:number_of_event_types
     set(handles.selection.item(n),...
         'callback',     {@cb_event_selection, n});
 end
-
 
 % create the menu bar
 % ~~~~~~~~~~~~~~~~~~~
@@ -106,6 +105,7 @@ handles.menu.montage    = uimenu(handles.fig, 'label', 'montage', 'enable', 'off
 
 handles.menu.events     = uimenu(handles.fig, 'label', 'events', 'accelerator', 'v');
 
+% options menu
 handles.menu.options    = uimenu(handles.fig, 'label', 'options');
 handles.menu.disp_chans = uimenu(handles.menu.options,...
     'label', 'display channels',...
@@ -122,6 +122,18 @@ handles.menu.icatoggle = uimenu(handles.menu.options,...
 handles.menu.export_hidden_chans = uimenu(handles.menu.options,...
     'label', 'export hidden channels',...
     'accelerator', 'x');
+
+% scroll bar
+% ~~~~~~~~~~  
+handles.vertical_scroll = uicontrol(...
+    'Parent',   handles.fig,...
+    'Units',    'normalized',...
+    'Style',    'slider',...
+    'Position', [0.01, 0.4, 0.015, 0.4],...
+    'Max',      -1,...
+    'Min',      -(length(handles.disp_chans)),...
+    'value',    -1,...
+    'callback', @cb_scrollbar);
 
 % scale indicator
 % ~~~~~~~~~~~~~~~
@@ -162,11 +174,10 @@ set(handles.spike_ax, 'buttondownfcn', {@fcn_time_select});
 %set(handles.vertical_scroll, 'callback', {@scroll_callback})
 guidata(handles.fig, handles)
 
-
 % If passed an eeg struct, use that. Otherwise, wait for user to load a file. 
 switch nargin
   case 0
-    ; %do nothing
+    % do nothing
   case 1
     EEG = varargin{1};
     EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
@@ -212,12 +223,10 @@ EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
 set(handles.fig, 'name', ['csc: ', dataFile]);
 % update the handles structure
 guidata(handles.fig, handles)
+
 % use setappdata for data storage to avoid passing it around in handles when not necessary
 setappdata(handles.fig, 'EEG', EEG);
 setappdata(handles.fig, 'eegData', eegData);
-
-% turn on the montage option
-set(handles.menu.montage, 'enable', 'on');
 
 % plot the initial data
 update_main_plot(handles.fig);
@@ -226,7 +235,6 @@ update_main_plot(handles.fig);
 if isfield(EEG, 'csc_event_data')
    fcn_redraw_events(object, []); 
 end
-
 
 function fcn_save_eeg(object, ~)
 % get the handles from the figure
@@ -253,26 +261,35 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % select the plotting data
 current_point = get(handles.cPoint, 'value');
-range       = [current_point:...
-               current_point+handles.epoch_length*EEG.srate-1];
+range = current_point : ...
+    current_point + handles.epoch_length * EEG.srate -1;
+           
 % TODO: options for original and average reference
 if handles.plotICA == 1
   title(handles.main_ax, 'Component Activations', 'Color', 'w');
   icaData = getappdata(handles.fig, 'icaData');
-  data        = icaData(EEG.csc_montage.channels(handles.disp_chans,1),range);
+  data        = icaData(EEG.csc_montage.channels(handles.disp_chans, 1),range);
+  
 else
   title(handles.main_ax, 'Channel Activations', 'Color', 'w');
   eegData = getappdata(handles.fig, 'eegData');
-  data        = eegData(EEG.csc_montage.channels(handles.disp_chans,1), range)...
-              - eegData(EEG.csc_montage.channels(handles.disp_chans,2), range);
+  
+  if strcmp(EEG.csc_montage.name, 'original')
+      data = eegData(handles.disp_chans, range);
+  else  
+      data = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
+          - eegData(EEG.csc_montage.channels(handles.disp_chans, 2), range);
+  end
+  
   % filter the data
   % ~~~~~~~~~~~~~~~
   [EEG.filter.b, EEG.filter.a] = ...
           butter(2,[handles.filter_options(1)/(EEG.srate/2),...
                     handles.filter_options(2)/(EEG.srate/2)]);
-  % @TODO firfilt tries to run Octave fn on Matlab
-  data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))'); %transpose data twicev
+  data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))');
 end
+
+
 % plot the data
 % ~~~~~~~~~~~~~
 % define accurate spacing
@@ -281,7 +298,7 @@ toAdd = [1:handles.n_disp_chans]'*scale;
 toAdd = repmat(toAdd, [1, length(range)]);
 
 % space out the data for the single plot
-data = data+toAdd;
+data = data + toAdd;
 
 set([handles.main_ax, handles.name_ax], 'yLim', [scale 0]*(handles.n_disp_chans+1))
 
@@ -349,17 +366,18 @@ handles.indicator = line([range(1), range(1)], [0, 1],...
 guidata(handles.fig, handles);
 setappdata(handles.fig, 'EEG', EEG);
 
-function scroll_callback(object, ~)
-  handles = guidata(object);
-  EEG = getappdata(handles.fig, 'EEG');
-  
-  val = 1-object.Value;
-  startChan = ceil(val*(length(EEG.csc_montage.label_channels)-handles.n_disp_chans))+1;
-  handles.disp_chans = [startChan:startChan+handles.n_disp_chans-1];
-  
-  guidata(object, handles);
-  update_main_plot(object);
+function cb_scrollbar(object, ~)
+% callback to the change the displayed channels
+handles = guidata(object);
+EEG = getappdata(handles.fig, 'EEG');
 
+% calculate the new display channel range
+new_start = -ceil(handles.vertical_scroll.Value);
+handles.disp_chans = [new_start : new_start + handles.n_disp_chans - 1];
+
+% update the handles and replot the data
+guidata(handles.fig, handles);
+update_main_plot(object);
 
 function fcn_change_time(object, ~)
 % get the handles from the guidata
@@ -410,7 +428,6 @@ switch state
 end
 guidata(object, handles);
 
-
 function fcn_time_select(object, ~)
 handles = guidata(object);
 
@@ -419,6 +436,61 @@ clicked_position = get(handles.spike_ax, 'currentPoint');
 
 set(handles.cPoint, 'Value', floor(clicked_position(1,1)));
 fcn_change_time(object, []);
+
+function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
+
+handles = guidata(object);
+
+% check for the channel locations
+if isempty(eegMeta.chanlocs)
+    if isempty(eegMeta.urchanlocs)
+        fprintf(1, 'Warning: No channel locations found in the eegMeta structure \n');
+    else
+        fprintf(1, 'Information: Taking the EEG.urchanlocs as the channel locations \n');
+        eegMeta.chanlocs = eegMeta.urchanlocs;
+    end
+end
+
+% check for previous
+if ~isfield(eegMeta, 'csc_montage')
+    % assign defaults
+    eegMeta.csc_montage.name = 'original';
+    eegMeta.csc_montage.label_channels      = cell(eegMeta.nbchan, 1);
+    for n = 1 : eegMeta.nbchan
+        eegMeta.csc_montage.label_channels(n) = {num2str(n)};
+    end
+    eegMeta.csc_montage.channels(:, 1)       = 1:eegMeta.nbchan;
+    eegMeta.csc_montage.channels(:, 2)       = eegMeta.nbchan;
+end
+
+% load ICA time courses if the information need to construct them is available.
+if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
+    if ~isempty(eegMeta.icaweights) && ~isempty(eegMeta.icasphere)
+        % If we have the same number of components as channels...
+        if size(eegMeta.icaweights, 1) == size(eegData, 1)
+            icaData = eegMeta.icaweights*eegMeta.icasphere*eegData;
+            setappdata(handles.fig, 'icaData', icaData);
+            % If we have fewer components than channels (maybe you've already removed
+            % some of them), then pad the ICA weights with zeros and produce component
+            % activations as if you had the same number of components as channels.
+        elseif size(eegMeta.icaweights, 1) < size(eegData,1)
+            dimdiff = size(eegData, 1) - size(eegMeta.icaweights, 1);
+            pad = zeros(dimdiff, size(eegMeta.icaweights, 2));
+            paddedweights = [eegMeta.icaweights ; pad];
+            icaData = paddedweights*eegMeta.icasphere*eegData;
+            setappdata(handles.fig, 'icaData', icaData);
+        else
+            error('ICA unmixing matrix is too large for data');
+        end
+    end
+end
+
+% turn on the montage option
+set(handles.menu.montage, 'enable', 'on');
+
+% reset the scrollbar values
+handles.vertical_scroll.Max = -1;
+handles.vertical_scroll.Min = -(eegMeta.nbchan - length(handles.disp_chans) + 1);
 
 
 % Event Functions
@@ -475,7 +547,6 @@ set(handles.table, 'data', event_data);
 % update the GUI handles
 guidata(handles.fig, handles)
 
-
 function event_data = fcn_compute_events(handles, ~)
 % function used to create the event_table from the handle structure
 
@@ -510,7 +581,6 @@ for type = 1:length(no_events)
     
 end
 
-
 function cb_select_table(object, event_data)
 % when a cell in the table is selected, jump to that time point
 
@@ -538,7 +608,6 @@ set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 
 % update the time in the plotter window
 fcn_change_time(handles.csc_plotter.fig, []);
-
 
 function cb_event_selection(object, ~, event_type, current_point)
 % get the handles
@@ -600,7 +669,6 @@ handles.events{event_type}(end, 3) = line([sample_point, sample_point], y,...
 % update the GUI handles
 guidata(handles.fig, handles)
 
-
 function bdf_delete_event(object, ~)
 % get the handles
 handles = guidata(object);
@@ -622,7 +690,6 @@ handles.events{event_type}(event_number, :) = [];
 
 % update the GUI handles
 guidata(handles.fig, handles)
-
 
 function fcn_redraw_events(object, ~)
 % function to erase all events and redraw their markers based on the
@@ -671,9 +738,11 @@ switch type
           % if more channels were requested than exist in the montage, take the number in the montage
           handles.n_disp_chans = min(str2double(answer{1}),...
                                      length(EEG.csc_montage.label_channels)); 
-          handles.disp_chans = [1:handles.n_disp_chans];
+          handles.disp_chans = [1 : handles.n_disp_chans];
+          
         else %length(answer) == 2, so a range was provided
-          disp_chans = [str2double(answer{1}):str2double(answer{2})];
+          disp_chans = [str2double(answer{1}) : str2double(answer{2})];
+          
           if isempty(disp_chans) %if bogus input like '99:12' was provided
             fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing\n');
             return
@@ -683,20 +752,7 @@ switch type
           end
         end
         
-        total_chans = length(EEG.csc_montage.label_channels);
-        % vertical scrollbar for selecting display channels
-        handles.vertical_scroll = uicontrol(...
-            'Parent',   handles.fig,...
-            'Units',    'normalized',... % MUST PRECEDE 'Position' OPTION! Awful.
-            'Style',    'slider',...
-            'Position', [.01, .4, .015, .4],... % height > width specifies vertical
-            'Max',      1,...
-            'Min',      0,...
-            'Value',    1-(handles.disp_chans(1)/(total_chans-handles.n_disp_chans+1)),...
-            'sliderstep', [1/length(EEG.csc_montage.label_channels),...
-                           handles.n_disp_chans/length(EEG.csc_montage.label_channels)],...
-            'callback', @scroll_callback);
-
+        % update the handles and re-plot
         guidata(object, handles);
         update_main_plot(object);
         
@@ -819,7 +875,6 @@ if isempty(event.Modifier)
                 set(relevant_handles, 'ydata', y_limits(1))
             end
             
-            
         case 'downarrow'
             scale = get(handles.txt_scale, 'value');
             if scale <= 20
@@ -842,6 +897,34 @@ if isempty(event.Modifier)
                 set(relevant_handles, 'ydata', y_limits(1))
             end
 
+        case 'pageup'
+            
+            % get the current top visible channel
+            top_channel = -handles.vertical_scroll.Value;
+            
+            if top_channel - handles.n_disp_chans < 1
+                handles.vertical_scroll.Value = -1;
+            else
+                handles.vertical_scroll.Value = -(top_channel - handles.n_disp_chans); 
+            end
+            
+            % redraw the plot by calling the scroll callback
+            cb_scrollbar(handles.vertical_scroll, []);            
+
+        case 'pagedown'
+            
+            % get the current top visible channel
+            bottom_channel = -handles.vertical_scroll.Value + handles.n_disp_chans -1;
+            
+            if bottom_channel + handles.n_disp_chans > -handles.vertical_scroll.Min
+                handles.vertical_scroll.Value = handles.vertical_scroll.Min;
+            else
+                handles.vertical_scroll.Value = -(bottom_channel + handles.n_disp_chans);
+            end
+            
+            % redraw the plot by calling the scroll callback
+            cb_scrollbar(handles.vertical_scroll, []);            
+            
         case 'g'
           handles.plot_grid = ~handles.plot_grid;
           guidata(object, handles);
@@ -1011,7 +1094,6 @@ guidata(handles.fig, handles);
 % plot the net
 plot_net(handles.fig)
 
-
 function plot_net(montage_handle)
 % get the handles and EEG structure
 handles  = guidata(montage_handle);
@@ -1058,7 +1140,6 @@ setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 update_net_arrows(handles.fig)
 
-
 function update_net_arrows(montage_handle)
 % get the handles and EEG structure
 handles     = guidata(montage_handle);
@@ -1090,7 +1171,6 @@ uistack(handles.txt_labels, 'top');
 
 guidata(handles.fig, handles);
 
-
 function bdf_select_channel(object, ~)
 % get the handles
 handles = guidata(object);
@@ -1118,7 +1198,6 @@ end
 
 set(handles.montage_list, 'value', 1);
 
-
 function fcn_button_delete(object, ~)
 % get the handles
 handles = guidata(object);
@@ -1134,7 +1213,6 @@ set(handles.table, 'data', data);
 
 % update the arrows on the montage plot
 update_net_arrows(handles.fig)
-
 
 function fcn_button_apply(object, ~)
 % get the montage handles
@@ -1158,28 +1236,21 @@ if length(EEG.csc_montage.label_channels) < handles.csc_plotter.n_disp_chans
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
-% vertical scrollbar for selecting display channels
-handles.vertical_scroll = uicontrol(...
-    'Parent',   handles.csc_plotter.fig,...
-    'Units',    'normalized',... % MUST PRECEDE 'Position' OPTION! Awful.
-    'Style',    'slider',...
-    'Position', [.01, .4, .015, .4],... % height > width specifies vertical
-    'Max',      1,...
-    'Min',      0,...
-    'Value',    1,...
-    'sliderstep', [1/length(EEG.csc_montage.label_channels),...
-                   handles.csc_plotter.n_disp_chans/length(EEG.csc_montage.label_channels)],...
-    'callback', @scroll_callback);
-
 % Reset hidden channels
 handles.csc_plotter.hidden_chans = [];
 
+% update the slider to reflect new montage
+handles.csc_plotter.vertical_scroll.Value = -1;
+handles.csc_plotter.vertical_scroll.Min = -(EEG.nbchan - length(handles.csc_plotter.disp_chans));
+
+% update the handle structures
 guidata(handles.fig, handles);
 guidata(handles.csc_plotter.fig, handles.csc_plotter);
 setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
-update_main_plot(handles.csc_plotter.fig);
-
+% update the plot using the scrollbar callback
+% update_main_plot(handles.csc_plotter.fig);
+cb_scrollbar(handles.csc_plotter.vertical_scroll, []);
 
 function fcn_select_montage(object, ~)
 % get the montage handles
@@ -1194,6 +1265,9 @@ montage_dir  = fullfile(fileparts(montage_dir), 'Montages');
 montage_name = get(handles.montage_list, 'string');
 montage_name = montage_name{get(handles.montage_list, 'value')};
 
+% set the montage back into the EEG.csc_montage
+EEG.csc_montage.name = montage_name;
+
 % check if the empty string was selected
 if ~isempty(montage_name) && ~strcmp(montage_name, 'original')
     montage = load(fullfile(montage_dir, montage_name), '-mat');
@@ -1203,7 +1277,7 @@ if ~isempty(montage_name) && ~strcmp(montage_name, 'original')
         fprintf(1, 'Warning: could not find montage data in the file.\n');
     end
 elseif ~isempty(montage_name) && strcmp(montage_name, 'original')
-    % TODO make unreferenced montage
+    % taken care of in the u
 end
 
 % update the handles in the structure
@@ -1212,7 +1286,6 @@ setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 % update the arrows on the montage plot
 update_net_arrows(handles.fig)
-
 
 function fcn_save_montage(object, ~)
 % get the montage handles
@@ -1255,55 +1328,4 @@ new_index = find(strcmp(fileName, montage_list));
 set(handles.montage_list,...
     'string', montage_list,...
     'value', new_index);
-
-% This function does NOT save changes the eegMeta or eegData objects. YOU must
-% do that using the return. 
-function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
-  handles = guidata(object);
-
-  % check for the channel locations
-  if isempty(eegMeta.chanlocs)
-      if isempty(eegMeta.urchanlocs)
-          fprintf(1, 'Warning: No channel locations found in the eegMeta structure \n');
-      else
-          fprintf(1, 'Information: Taking the EEG.urchanlocs as the channel locations \n');
-          eegMeta.chanlocs = eegMeta.urchanlocs;
-      end
-  end
-
-  % check for previous
-  if ~isfield(eegMeta, 'csc_montage')
-      % assign defaults
-      eegMeta.csc_montage.label_channels      = cell(eegMeta.nbchan, 1);
-      for i=1:eegMeta.nbchan
-        eegMeta.csc_montage.label_channels(i) = {num2str(i)};
-      end
-      eegMeta.csc_montage.channels(:,1)       = [1:eegMeta.nbchan]';
-      eegMeta.csc_montage.channels(:,2)       = eegMeta.nbchan;
-  end
-
-  % load ICA time courses if the information need to construct them is available.
-  if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
-    if ~isempty(eegMeta.icaweights) && ~isempty(eegMeta.icasphere)
-      % If we have the same number of components as channels...
-      if size(eegMeta.icaweights, 1) == size(eegData, 1)
-          icaData = eegMeta.icaweights*eegMeta.icasphere*eegData;
-          setappdata(handles.fig, 'icaData', icaData);
-      % If we have fewer components than channels (maybe you've already removed
-      % some of them), then pad the ICA weights with zeros and produce component
-      % activations as if you had the same number of components as channels. 
-      elseif size(eegMeta.icaweights, 1) < size(eegData,1)
-        dimdiff = size(eegData, 1) - size(eegMeta.icaweights, 1);
-        pad = zeros(dimdiff, size(eegMeta.icaweights, 2));
-        paddedweights = [eegMeta.icaweights ; pad];
-        icaData = paddedweights*eegMeta.icasphere*eegData;
-        setappdata(handles.fig, 'icaData', icaData);
-      else
-        error('ICA unmixing matrix is too large for data');
-      end
-    end
-  end
-  % turn on the montage option
-  set(handles.menu.montage, 'enable', 'on');
-  return
 
