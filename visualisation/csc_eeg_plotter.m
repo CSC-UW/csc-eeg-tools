@@ -919,7 +919,7 @@ if isempty(event.Modifier)
             if bottom_channel + handles.n_disp_chans > -handles.vertical_scroll.Min
                 handles.vertical_scroll.Value = handles.vertical_scroll.Min;
             else
-                handles.vertical_scroll.Value = -(bottom_channel + handles.n_disp_chans);
+                handles.vertical_scroll.Value = -(bottom_channel + 1);
             end
             
             % redraw the plot by calling the scroll callback
