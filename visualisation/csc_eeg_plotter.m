@@ -477,7 +477,14 @@ if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
             dimdiff = size(eegData, 1) - size(eegMeta.icaweights, 1);
             pad = zeros(dimdiff, size(eegMeta.icaweights, 2));
             paddedweights = [eegMeta.icaweights ; pad];
-            icaData = paddedweights*eegMeta.icasphere*eegData;
+            try
+                icaData = paddedweights*eegMeta.icasphere*eegData;
+            catch
+                fprintf('%s. %s.',...
+                        'Data were reinterpolated after IC removal',...
+                        'Can no longer display IC activations');
+                icaData = zeros(size(eegData));
+            end
             setappdata(handles.fig, 'icaData', icaData);
         else
             error('ICA unmixing matrix is too large for data');
