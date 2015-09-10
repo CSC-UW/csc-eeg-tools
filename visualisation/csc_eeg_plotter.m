@@ -16,6 +16,7 @@ function csc_eeg_plotter(varargin)
         %Green line in front of headset
         %headset electrodes smaller due to poor resolution on my computer
 
+% TODO: Fix this ugly default setting style (e.g. handles.options...)        
 % declare defaults
 N_DISP_CHANS = 12;
 PLOT_ICA = 0;
@@ -181,12 +182,28 @@ switch nargin
   case 1
     EEG = varargin{1};
     EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
+       
+    % check for previously epoched data
+    if ndims(EEG.data) == 3
+        % flatten the third dimension into the second
+        eegData = reshape(EEG.data, size(EEG.data, 1), []);
+        setappdata(handles.fig, 'eegData', eegData);
+    else
+        setappdata(handles.fig, 'eegData', EEG.data);
+    end
+            
     setappdata(handles.fig, 'EEG', EEG);
-    setappdata(handles.fig, 'eegData', EEG.data);
     update_main_plot(handles.fig);
+    
   otherwise
     error('Either 0 or 1 arguments expected.');
 end
+% TODO: able to output the edited EEG structure for artifact detection etc
+% if nargout > 0
+%     uiwait(handles.fig);
+%     EEG = getappdata(handles.fig, 'EEG');
+% end
+
  
 % File Loading and Saving
 % ^^^^^^^^^^^^^^^^^^^^^^^
@@ -263,8 +280,8 @@ EEG = getappdata(handles.fig, 'EEG');
 current_point = get(handles.cPoint, 'value');
 range = current_point : ...
     current_point + handles.epoch_length * EEG.srate -1;
-           
-% TODO: options for original and average reference
+
+% check for ica flag plot and get if there
 if handles.plotICA == 1
   title(handles.main_ax, 'Component Activations', 'Color', 'w');
   icaData = getappdata(handles.fig, 'icaData');
@@ -303,6 +320,7 @@ data = data + toAdd;
 set([handles.main_ax, handles.name_ax], 'yLim', [scale 0]*(handles.n_disp_chans+1))
 
 % in the case of replotting delete the old handles
+% TODO: seems to always replot entire line... best to reset yData!
 if isfield(handles, 'plot_eeg')
     delete(handles.plot_eeg);
     delete(handles.labels);
@@ -385,14 +403,17 @@ handles = guidata(object);
 % Get the EEG from the figure's appdata
 EEG = getappdata(handles.fig, 'EEG');
 
+% calculate number of samples
+number_samples = EEG.pnts * EEG.trials;
+
 current_point = get(handles.cPoint, 'value');
 if current_point < 1
     fprintf(1, 'This is the first sample \n');
     set(handles.cPoint, 'value', 1);
-elseif current_point > EEG.pnts - handles.epoch_length * EEG.srate
+elseif current_point > number_samples - handles.epoch_length * EEG.srate
     fprintf(1, 'No more data \n');
     set(handles.cPoint,...
-        'value', EEG.pnts - handles.epoch_length * EEG.srate );
+        'value', number_samples - handles.epoch_length * EEG.srate );
 end
 current_point = get(handles.cPoint, 'value');
 
@@ -498,6 +519,7 @@ set(handles.menu.montage, 'enable', 'on');
 % reset the scrollbar values
 handles.vertical_scroll.Max = -1;
 handles.vertical_scroll.Min = -(eegMeta.nbchan - length(handles.disp_chans) + 1);
+
 
 
 % Event Functions
