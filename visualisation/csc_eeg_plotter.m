@@ -172,13 +172,14 @@ set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
 
 set(handles.spike_ax, 'buttondownfcn', {@fcn_time_select});
-%set(handles.vertical_scroll, 'callback', {@scroll_callback})
+
+% update the figure handles
 guidata(handles.fig, handles)
 
-% If passed an eeg struct, use that. Otherwise, wait for user to load a file. 
+% Look for input arguments
 switch nargin
   case 0
-    % do nothing
+    % wait for user input
   case 1
     EEG = varargin{1};
     EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
@@ -188,16 +189,23 @@ switch nargin
         % flatten the third dimension into the second
         eegData = reshape(EEG.data, size(EEG.data, 1), []);
         setappdata(handles.fig, 'eegData', eegData);
+        
+        % change the epoch length to match trial length by default
+        handles.epoch_length = EEG.pnts / EEG.srate;
+        guidata(handles.fig, handles)
+        
     else
         setappdata(handles.fig, 'eegData', EEG.data);
     end
-            
+           
+    % update the plot to draw current EEG
     setappdata(handles.fig, 'EEG', EEG);
     update_main_plot(handles.fig);
     
   otherwise
     error('Either 0 or 1 arguments expected.');
 end
+
 % TODO: able to output the edited EEG structure for artifact detection etc
 % if nargout > 0
 %     uiwait(handles.fig);
@@ -238,13 +246,22 @@ EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
 
 % set the name
 set(handles.fig, 'name', ['csc: ', dataFile]);
+
 % update the handles structure
 guidata(handles.fig, handles)
 
 % use setappdata for data storage to avoid passing it around in handles when not necessary
 setappdata(handles.fig, 'EEG', EEG);
-setappdata(handles.fig, 'eegData', eegData);
 
+% check for previously epoched data
+if ndims(EEG.data) == 3
+    % flatten the third dimension into the second
+    eegData = reshape(EEG.data, size(EEG.data, 1), []);
+    setappdata(handles.fig, 'eegData', eegData);
+else
+    setappdata(handles.fig, 'eegData', EEG.data);
+end
+    
 % plot the initial data
 update_main_plot(handles.fig);
 
@@ -285,7 +302,7 @@ range = current_point : ...
 if handles.plotICA == 1
   title(handles.main_ax, 'Component Activations', 'Color', 'w');
   icaData = getappdata(handles.fig, 'icaData');
-  data        = icaData(EEG.csc_montage.channels(handles.disp_chans, 1),range);
+  data = icaData(EEG.csc_montage.channels(handles.disp_chans, 1),range);
   
 else
   title(handles.main_ax, 'Channel Activations', 'Color', 'w');
