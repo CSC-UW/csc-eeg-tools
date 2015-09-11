@@ -200,15 +200,16 @@ switch nargin
         
         % change the epoch length to match trial length by default
         handles.epoch_length = EEG.pnts / EEG.srate;
-        % allocate marked trials
-        handles.trials = false(EEG.trials, 1);
-        guidata(handles.fig, handles)
                
     else
         setappdata(handles.fig, 'EEG', EEG);
         setappdata(handles.fig, 'eegData', EEG.data);
     end
-           
+    
+    % allocate marked trials
+    handles.trials = false(EEG.trials, 1);
+    guidata(handles.fig, handles)
+
     % update the plot to draw current EEG
     update_main_plot(handles.fig);
     
@@ -239,6 +240,11 @@ if nargout > 0
         EEG.csc_event_data = fcn_compute_events(handles);
     end
     
+    % just add the hidden channels and trials to the data
+    EEG.marked_trials = handles.trials;
+    % TODO: won't work with different montages just yet
+    EEG.hidden_channels = handles.hidden_chans;
+        
     % close the figure
     delete(handles.fig);    
 end
@@ -394,10 +400,9 @@ if handles.plot_grid
 end
 
 % Get indices of channels to hide
-hidden_idx = find(ismember(handles.disp_chans, handles.hidden_chans));
+hidden_idx = ismember(handles.disp_chans, handles.hidden_chans);
 % Now hide them
 set(handles.plot_eeg(hidden_idx), 'visible', 'off');
-
 
 % plot the labels in their own boxes
 handles.labels = zeros(handles.n_disp_chans, 1);
@@ -436,7 +441,16 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % calculate the new display channel range
 new_start = -ceil(handles.vertical_scroll.Value);
-handles.disp_chans = [new_start : new_start + handles.n_disp_chans - 1];
+
+% check whether new_start and potential end make sense
+total_channels = length(EEG.csc_montage.channels(:, 1));
+if new_start + handles.n_disp_chans - 1 < total_channels
+    % change the indices of displayed channels
+    handles.disp_chans = new_start : new_start + handles.n_disp_chans - 1;
+else
+    handles.disp_chans = total_channels - handles.n_disp_chans + 1 : total_channels;
+end
+
 
 % update the handles and replot the data
 guidata(handles.fig, handles);
@@ -903,6 +917,9 @@ switch type
             handles.n_disp_chans = length(handles.disp_chans);
           end
         end
+        
+        % when changing the number of channels go back to 1
+        handles.vertical_scroll.Value = -1;
         
         % update the handles and re-plot
         guidata(object, handles);
