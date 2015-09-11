@@ -225,7 +225,9 @@ if nargout > 0
     EEG = getappdata(handles.fig, 'EEG');
 
     % add the event table to the EEG struct
-    EEG.csc_event_data = fcn_compute_events(handles);
+    if isfield(handles, 'events')
+        EEG.csc_event_data = fcn_compute_events(handles);
+    end
     
     % close the figure
     delete(handles.fig);    
@@ -292,7 +294,9 @@ handles = guidata(object);
 EEG = getappdata(handles.fig, 'EEG');
 
 % add the event table to the EEG struct
-EEG.csc_event_data = fcn_compute_events(handles);
+if isfield(handles, 'events')
+    EEG.csc_event_data = fcn_compute_events(handles);
+end
 
 % Ask where to put file...
 [saveFile, savePath] = uiputfile('*.set');
