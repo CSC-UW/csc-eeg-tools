@@ -202,7 +202,6 @@ switch nargin
            
     % update the plot to draw current EEG
     setappdata(handles.fig, 'EEG', EEG);
-    
     update_main_plot(handles.fig);
     
     % redraw event triangles if present
@@ -653,7 +652,7 @@ for type = 1:length(no_events)
     
     % return the xdata from the handles
     % check for single event
-    if range == 1
+    if numel(range) < 2
         event_data(range, 2) = {get(events{type}(:,1), 'xdata')};
     else
         event_data(range, 2) = get(events{type}(:,1), 'xdata');
