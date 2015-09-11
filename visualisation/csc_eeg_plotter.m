@@ -1,4 +1,4 @@
-function csc_eeg_plotter(varargin)
+function EEG = csc_eeg_plotter(varargin)
 
 %TODO: Main page 
         %Scale - green lines across one of the channels
@@ -156,6 +156,8 @@ handles.cPoint = uicontrol(...
 
 % set the callbacks
 % ~~~~~~~~~~~~~~~~~
+set(handles.fig, 'closeRequestFcn', {@fcn_close_window});
+
 set(handles.menu.load,      'callback', {@fcn_load_eeg});
 set(handles.menu.save,      'callback', {@fcn_save_eeg});
 set(handles.menu.montage,   'callback', {@fcn_montage_setup});
@@ -200,17 +202,34 @@ switch nargin
            
     % update the plot to draw current EEG
     setappdata(handles.fig, 'EEG', EEG);
+    
     update_main_plot(handles.fig);
+    
+    % redraw event triangles if present
+    if isfield(EEG, 'csc_event_data')
+        fcn_redraw_events(handles.fig, []);
+    end
     
   otherwise
     error('Either 0 or 1 arguments expected.');
 end
 
 % TODO: able to output the edited EEG structure for artifact detection etc
-% if nargout > 0
-%     uiwait(handles.fig);
-%     EEG = getappdata(handles.fig, 'EEG');
-% end
+if nargout > 0
+    uiwait(handles.fig);
+    
+    % get the handles structure
+    handles = guidata(handles.fig);
+    
+    % get the metadata
+    EEG = getappdata(handles.fig, 'EEG');
+
+    % add the event table to the EEG struct
+    EEG.csc_event_data = fcn_compute_events(handles);
+    
+    % close the figure
+    delete(handles.fig);    
+end
 
  
 % File Loading and Saving
@@ -264,11 +283,6 @@ end
     
 % plot the initial data
 update_main_plot(handles.fig);
-
-% redraw event triangles if present
-if isfield(EEG, 'csc_event_data')
-   fcn_redraw_events(object, []); 
-end
 
 function fcn_save_eeg(object, ~)
 % get the handles from the figure
@@ -537,6 +551,20 @@ set(handles.menu.montage, 'enable', 'on');
 handles.vertical_scroll.Max = -1;
 handles.vertical_scroll.Min = -(eegMeta.nbchan - length(handles.disp_chans) + 1);
 
+function fcn_close_window(object, ~)
+% just resume the ui if the figure is closed
+handles = guidata(object);
+
+% get current figure status
+current_status = get(handles.fig, 'waitstatus');
+
+switch current_status
+    case 'waiting'
+        uiresume;
+    otherwise
+        % close the figure
+        delete(handles.fig);
+end
 
 
 % Event Functions
@@ -620,7 +648,12 @@ for type = 1:length(no_events)
     event_data(range, 1) = {get(handles.selection.item(type), 'label')};
     
     % return the xdata from the handles
-    event_data(range, 2) = get(events{type}(:,1), 'xdata');
+    % check for single event
+    if range == 1
+        event_data(range, 2) = {get(events{type}(:,1), 'xdata')};
+    else
+        event_data(range, 2) = get(events{type}(:,1), 'xdata');
+    end
     
     % add the event type number in case labels are changed
     event_data(range, 3) = {type};
@@ -661,6 +694,9 @@ handles = guidata(object);
 % Get the EEG from the figure's appdata
 EEG = getappdata(handles.fig, 'EEG');
 
+% get the default color order for the axes
+event_colors = get(handles.main_ax, 'ColorOrder');
+
 % check if its the first item
 if ~isfield(handles, 'events')
    handles.events = cell(length(handles.selection.item), 1);
@@ -681,8 +717,8 @@ handles.events{event_type}(end+1, 1) = plot(x, y(1),...
     'lineStyle', 'none',...
     'marker', '^',...
     'markerSize', 20,...
-    'markerEdgeColor', [0.6, 0.9, 0.9],...
-    'markerFaceColor', [0.9, 0.9, 0.6],...
+    'markerEdgeColor', [0.9, 0.9, 0.9],...
+    'markerFaceColor', event_colors(event_type, :),...
     'userData', event_type,...
     'parent', handles.main_ax,...
     'buttonDownFcn', {@bdf_delete_event});
@@ -692,8 +728,8 @@ handles.events{event_type}(end, 2) = plot(x, y(2),...
     'lineStyle', 'none',...
     'marker', 'v',...
     'markerSize', 20,...
-    'markerEdgeColor', [0.6, 0.9, 0.9],...
-    'markerFaceColor', [0.9, 0.9, 0.6],...
+    'markerEdgeColor', [0.9, 0.9, 0.9],...
+    'markerFaceColor', event_colors(event_type, :),...
     'userData', event_type,...
     'parent', handles.main_ax,...
     'buttonDownFcn', {@bdf_delete_event});
