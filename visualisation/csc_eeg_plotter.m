@@ -123,6 +123,9 @@ handles.menu.icatoggle = uimenu(handles.menu.options,...
 handles.menu.export_hidden_chans = uimenu(handles.menu.options,...
     'label', 'export hidden channels',...
     'accelerator', 'x');
+handles.menu.export_marked_trials = uimenu(handles.menu.options,...
+    'label', 'export marked trials',...
+    'accelerator', 't');
 
 % scroll bar
 % ~~~~~~~~~~  
@@ -169,6 +172,8 @@ set(handles.menu.filter_settings, 'callback', {@fcn_options, 'filter_settings'})
 set(handles.menu.icatoggle,    'callback', {@fcn_options, 'icatoggle'});
 set(handles.menu.export_hidden_chans, 'callback',...
     {@fcn_options, 'export_hidden_chans'});
+set(handles.menu.export_marked_trials, 'callback',...
+    {@fcn_options, 'export_marked_trials'});
 
 set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
@@ -187,27 +192,33 @@ switch nargin
     EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
        
     % check for previously epoched data
-    if ndims(EEG.data) == 3
+    if EEG.trials > 1
         % flatten the third dimension into the second
         eegData = reshape(EEG.data, size(EEG.data, 1), []);
+        setappdata(handles.fig, 'EEG', EEG);
         setappdata(handles.fig, 'eegData', eegData);
         
         % change the epoch length to match trial length by default
         handles.epoch_length = EEG.pnts / EEG.srate;
+        % allocate marked trials
+        handles.trials = false(EEG.trials, 1);
         guidata(handles.fig, handles)
-        
+               
     else
+        setappdata(handles.fig, 'EEG', EEG);
         setappdata(handles.fig, 'eegData', EEG.data);
     end
            
     % update the plot to draw current EEG
-    setappdata(handles.fig, 'EEG', EEG);
     update_main_plot(handles.fig);
     
     % redraw event triangles if present
     if isfield(EEG, 'csc_event_data')
         fcn_redraw_events(handles.fig, []);
     end
+    
+    % draw trial borders on the main axes
+    fcn_plot_trial_borders(handles.fig)
     
   otherwise
     error('Either 0 or 1 arguments expected.');
@@ -561,6 +572,12 @@ handles = guidata(object);
 % get current figure status
 current_status = get(handles.fig, 'waitstatus');
 
+if isempty(current_status)
+    % close the figure
+    delete(handles.fig);
+    return;
+end
+
 switch current_status
     case 'waiting'
         uiresume;
@@ -792,6 +809,56 @@ for n = 1:size(EEG.csc_event_data, 1)
     cb_event_selection(object, [], EEG.csc_event_data{n, 3}, EEG.csc_event_data{n, 2})
 end
 
+function fcn_plot_trial_borders(object, ~)
+% function to plot the borders of trials for epoched data
+
+% get the handles
+handles = guidata(object);
+% Get the EEG from the figure's appdata
+EEG = getappdata(handles.fig, 'EEG');
+
+% check for epoched data
+if EEG.trials == 1
+    return;
+end
+
+% get the trial starts in concatenated samples
+x = (1 : EEG.pnts : EEG.pnts * EEG.trials) / EEG.srate;
+
+% get the y limits of the main axes
+y = get(handles.main_ax, 'ylim');
+
+% draw bottom arrow
+handles.trial_borders = plot(x, y(1),...
+    'lineStyle', 'none',...
+    'marker', '>',...
+    'markerSize', 20,...
+    'markerEdgeColor', [0.9, 0.9, 0.9],...
+    'markerFaceColor', [0.6, 0.6, 0.6],...
+    'parent', handles.main_ax,...
+    'buttonDownFcn', {@bdf_mark_trial});
+
+% update the GUI handles
+guidata(handles.fig, handles)
+
+function bdf_mark_trial(object, ~)
+% get the handles
+handles = guidata(object);
+
+% calculate the trial number
+trial_number = find(object == handles.trial_borders);
+
+if ~handles.trials(trial_number)
+    handles.trials(trial_number) = true;
+    set(object, 'markerFaceColor', [0.9, 0.2, 0.2]);
+else
+    handles.trials(trial_number) = false;
+    set(object, 'markerFaceColor', [0.6, 0.6, 0.6]);
+end
+
+% update the GUI handles
+guidata(handles.fig, handles)
+
 
 % Options Menu and their Keyboard Shortcuts
 % ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -895,27 +962,42 @@ switch type
         end
         guidata(object, handles);
         update_main_plot(object);
-            
+        
     case 'export_hidden_chans'
-      
-      var_name = inputdlg('Workspace variable to export to?',...
-                        '', 1, {'hidden_chans'});
-      var_name = var_name{1} % *sigh*
-      eval_str = sprintf('exist(''%s'')', var_name); % will check if var exists
-      if(evalin('base', eval_str)) % If variable already exists
-        warning_msg = ['A variable with thise name already exists in your '...
-        'workspace. Are you sure you want to overwrite it?'];
-        answer = questdlg(warning_msg);
-        if ~strcmp(answer, 'Yes')
-          return
+        % export the hidden channels
+        var_name = inputdlg('Workspace variable to export to?',...
+            '', 1, {'hidden_channels'});
+        var_name = var_name{1} % *sigh*
+        eval_str = sprintf('exist(''%s'')', var_name); % will check if var exists
+        if(evalin('base', eval_str)) % If variable already exists
+            warning_msg = ['A variable with thise name already exists in your '...
+                'workspace. Are you sure you want to overwrite it?'];
+            answer = questdlg(warning_msg);
+            if ~strcmp(answer, 'Yes')
+                return
+            end
         end
-      end
-      labels = EEG.csc_montage.label_channels(handles.hidden_chans);
-      refs = EEG.csc_montage.channels(handles.hidden_chans, :);
-      refs = mat2cell(refs, ones(length(handles.hidden_chans), 1), ones(2, 1)); 
-      selected_channels = [labels refs];
-      assignin('base', var_name, selected_channels);
-
+        labels = EEG.csc_montage.label_channels(handles.hidden_chans);
+        refs = EEG.csc_montage.channels(handles.hidden_chans, :);
+        refs = mat2cell(refs, ones(length(handles.hidden_chans), 1), ones(2, 1));
+        selected_channels = [labels refs];
+        assignin('base', var_name, selected_channels);
+        
+    case 'export_marked_trials'
+        % export the marked trials
+        var_name = inputdlg('Workspace variable to export to?',...
+            '', 1, {'marked_trials'});
+        var_name = var_name{1} % *sigh*
+        eval_str = sprintf('exist(''%s'')', var_name); % will check if var exists
+        if(evalin('base', eval_str)) % If variable already exists
+            warning_msg = ['A variable with thise name already exists in your '...
+                'workspace. Are you sure you want to overwrite it?'];
+            answer = questdlg(warning_msg);
+            if ~strcmp(answer, 'Yes')
+                return
+            end
+        end
+        assignin('base', var_name, handles.trials);
 end
 
 function cb_key_pressed(object, event)
@@ -1413,4 +1495,5 @@ new_index = find(strcmp(fileName, montage_list));
 set(handles.montage_list,...
     'string', montage_list,...
     'value', new_index);
+
 
