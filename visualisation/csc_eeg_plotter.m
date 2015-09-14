@@ -185,44 +185,47 @@ guidata(handles.fig, handles)
 
 % Look for input arguments
 switch nargin
-  case 0
-    % wait for user input
-  case 1
-    EEG = varargin{1};
-    EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
-       
-    % check for previously epoched data
-    if EEG.trials > 1
-        % flatten the third dimension into the second
-        eegData = reshape(EEG.data, size(EEG.data, 1), []);
-        setappdata(handles.fig, 'EEG', EEG);
-        setappdata(handles.fig, 'eegData', eegData);
+    case 0
+        % wait for user input
+    case 1
         
-        % change the epoch length to match trial length by default
-        handles.epoch_length = EEG.pnts / EEG.srate;
-               
-    else
-        setappdata(handles.fig, 'EEG', EEG);
-        setappdata(handles.fig, 'eegData', EEG.data);
-    end
-    
-    % allocate marked trials
-    handles.trials = false(EEG.trials, 1);
-    guidata(handles.fig, handles)
-
-    % update the plot to draw current EEG
-    update_main_plot(handles.fig);
-    
-    % redraw event triangles if present
-    if isfield(EEG, 'csc_event_data')
-        fcn_redraw_events(handles.fig, []);
-    end
-    
-    % draw trial borders on the main axes
-    fcn_plot_trial_borders(handles.fig)
-    
-  otherwise
-    error('Either 0 or 1 arguments expected.');
+        % get the EEG from the input
+        EEG = varargin{1};
+        
+        % check for previously epoched data
+        if EEG.trials > 1
+            % flatten the third dimension into the second
+            eegData = reshape(EEG.data, size(EEG.data, 1), []);
+            setappdata(handles.fig, 'EEG', EEG);
+            setappdata(handles.fig, 'eegData', eegData);
+            
+            % change the epoch length to match trial length by default
+            handles.epoch_length = EEG.pnts / EEG.srate;
+            
+        else
+            setappdata(handles.fig, 'EEG', EEG);
+            setappdata(handles.fig, 'eegData', EEG.data);
+        end
+        
+        EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
+        
+        % allocate marked trials
+        handles.trials = false(EEG.trials, 1);
+        guidata(handles.fig, handles)
+        
+        % update the plot to draw current EEG
+        update_main_plot(handles.fig);
+        
+        % redraw event triangles if present
+        if isfield(EEG, 'csc_event_data')
+            fcn_redraw_events(handles.fig, []);
+        end
+        
+        % draw trial borders on the main axes
+        fcn_plot_trial_borders(handles.fig)
+        
+    otherwise
+        error('Either 0 or 1 arguments expected.');
 end
 
 % TODO: able to output the edited EEG structure for artifact detection etc
@@ -450,7 +453,6 @@ if new_start + handles.n_disp_chans - 1 < total_channels
 else
     handles.disp_chans = total_channels - handles.n_disp_chans + 1 : total_channels;
 end
-
 
 % update the handles and replot the data
 guidata(handles.fig, handles);
