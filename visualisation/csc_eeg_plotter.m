@@ -208,6 +208,7 @@ switch nargin
         end
         
         EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
+        setappdata(handles.fig, 'EEG', EEG);
         
         % allocate marked trials
         handles.trials = false(EEG.trials, 1);
@@ -228,7 +229,7 @@ switch nargin
         error('Either 0 or 1 arguments expected.');
 end
 
-% TODO: able to output the edited EEG structure for artifact detection etc
+% if an output is expected, wait for the figure to close
 if nargout > 0
     uiwait(handles.fig);
     
