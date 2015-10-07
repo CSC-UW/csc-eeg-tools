@@ -207,7 +207,7 @@ switch nargin
             setappdata(handles.fig, 'eegData', EEG.data);
         end
         
-        EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
+        EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
         setappdata(handles.fig, 'EEG', EEG);
         
         % allocate marked trials
