@@ -514,6 +514,21 @@ function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
 
 handles = guidata(object);
 
+if isfield(eegMeta, 'event')
+  % Confirm that events in EEGlab event structure meet EEGLab specs
+  assert(isfield(eegMeta.event, 'type'));
+  assert(isfield(eegMeta.event, 'latency'));
+  if ~isfield(eegMeta.event, 'urevent')
+    [eegMeta.event(:).urevent] = deal([]);
+  end
+  % Add description field if not present. Not required by EEGlab, but nice.
+  if ~isfield(eegMeta.event, 'description')
+    [eegMeta.event(:).description] = deal('');
+  end
+else
+  eegMeta.event = [];
+end
+
 % check for the channel locations
 if isempty(eegMeta.chanlocs)
     if isempty(eegMeta.urchanlocs)
@@ -702,16 +717,29 @@ EEG = getappdata(handles.fig, 'EEG');
 % as an argument, figure out what it should be.
 if nargin < 4
     % current_point is where the user clicked to creat the event
-    % current_point(1) is therefore the x coord on the main axis to plot the event.
+    % current_point(1,1) is the x coord on the main axis to plot the event.
     current_point = get(handles.main_ax, 'currentPoint');
+    current_point = current_point(1,1);
 end
 
-% Create the event
-event = struct(...
-    'type', sprintf('csc_type_%d', event_code),...
-    'latency', current_point * EEG.srate,...
-    'duration', 0,...
-    'description', '');
+% Create the event, but don't populate it with data yet
+% If previous events exist, use them as a template
+if ~isempty(EEG.event)
+  eventFields = fieldnames(EEG.event);
+  eventValues = cell(length(eventFields), 1); % struct is initally empty
+  event = cell2struct(eventValues, eventFields);
+  % "event" is now a struct with fields "eventFields" and empty values
+else
+  % If previous events do not exist, we'll just fill in the bare minimum info
+  event = struct();
+end
+
+% Populate the created event. All fields set here are guaranteed to exist b/c
+% they are either specified by EEGLab or initialized in `initialize_loaded_eeg`
+event.type = sprintf('csc_type_%d', event_code);
+event.latency = current_point * EEG.srate;
+event.description = '';
+event.urevent = []; % urevent==[] is EEGLab's way of saying that event is added by user
 
 % Add to the event list
 EEG.event(end+1) = event;
