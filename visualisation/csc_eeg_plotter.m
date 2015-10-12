@@ -32,7 +32,7 @@ handles.disp_chans = [1 : handles.n_disp_chans];
 % on the plot, but are invisible.
 handles.hidden_chans = [];
 % Will be populated by fcn_redraw_events if necessary
-handles.events = [];
+handles.events = {};
 % Plot normal time courses instead of component time courses by default
 handles.plotICA = PLOT_ICA;
 
@@ -555,7 +555,7 @@ if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
             catch
                 fprintf('%s. %s.',...
                         'Data were reinterpolated after IC removal',...
-                        'Can no longer display IC activations');
+                        'Can no longer display IC activations.\n');
                 icaData = zeros(size(eegData));
             end
             setappdata(handles.fig, 'icaData', icaData);
@@ -599,7 +599,7 @@ end
 function fcn_event_browser(object, ~)
 % get the handles and EEG struct
 handles.csc_plotter = guidata(object);
-EEG = getappdata(handles.csc_plotter, 'EEG');
+EEG = getappdata(handles.csc_plotter.fig, 'EEG');
 
 % check if any events exist
 if ~isfield(EEG, 'event') || isempty(EEG.event)
@@ -661,10 +661,10 @@ table_data = cell(length(plotted_events), 3);
 
 % Populate the table data
 for i = 1 : length(plotted_events)
-  event = plotted_events(i).event;
-  table_data(i, 1) = event.latency / EEG.srate; % time
-  table_data(i, 2) = event.type;
-  table_data(i, 3) = event.description;
+  event = plotted_events{i}.event;
+  table_data{i, 1} = event.latency / EEG.srate; % time
+  table_data{i, 2} = event.type;
+  table_data{i, 3} = event.description;
 end
 
 function cb_select_table(object, event_data)
@@ -677,11 +677,11 @@ EEG = getappdata(handles.csc_plotter.fig, 'EEG');
 
 % return the data from the table
 table_data = get(object, 'data');
-selected_row = event_data.Indicies(1);
+selected_row = event_data.Indices(1);
 
 % retrieve the time from the table
 selected_time = table_data{selected_row, 1};
-go_to_time = selected_time - handles.epoch_length/2; % so event is centered in window
+go_to_time = selected_time - handles.csc_plotter.epoch_length/2; % so event is centered in window
 selected_sample = floor(go_to_time * EEG.srate);
 
 % change the hidden time keeper
@@ -717,6 +717,7 @@ event = struct(...
 EEG.event(end+1) = event;
 
 % update the GUI handles
+setappdata(handles.fig, 'EEG', EEG);
 guidata(handles.fig, handles)
 
 % draw the event
@@ -751,9 +752,9 @@ y = get(handles.main_ax, 'ylim');
 bottom_marker = plot(x, y(1),...
     'lineStyle', 'none',...
     'marker', '^',...
-    'markerSize', 20,...
+    'markerSize', 10,...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
-    'markerFaceColor', event_color),...
+    'markerFaceColor', event_color,...
     'parent', handles.main_ax,...
     'buttonDownFcn', {@bdf_delete_event, event});
 
@@ -761,9 +762,9 @@ bottom_marker = plot(x, y(1),...
 top_marker = plot(x, y(2),...
     'lineStyle', 'none',...
     'marker', 'v',...
-    'markerSize', 20,...
+    'markerSize', 10,...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
-    'markerFaceColor', event_color),...
+    'markerFaceColor', event_color,...
     'parent', handles.main_ax,...
     'buttonDownFcn', {@bdf_delete_event, event});
 
@@ -779,7 +780,7 @@ spike_marker = line([event.latency, event.latency], y,...
 
 % store the event and its markers in the handles
 %~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-handles.events(end+1) = struct(...
+handles.events{end+1} = struct(...
     'event', event,...
     'bottom_marker', bottom_marker,...
     'top_marker', top_marker,...
@@ -791,31 +792,34 @@ guidata(handles.fig, handles)
 function bdf_delete_event(object, ~, event)
 % get the handles and EEG struct
 handles = guidata(object);
-EEG = getappdata(handles.fig, 'EEG')
+EEG = getappdata(handles.fig, 'EEG');
 
 % Find the handles to delete
 for i = 1 : length(handles.events)
   % If this is the right set of handles
-  if isequalwithnans(handles.events(i).event, event)
+  if isequaln(handles.events{i}.event, event)
     % delete the graphics objects associated with the event
-    delete(handles.events(i).bottom_marker);
-    delete(handles.events(i).top_marker);
-    delete(handles.events(i).spike_marker);
+    delete(handles.events{i}.bottom_marker);
+    delete(handles.events{i}.top_marker);
+    delete(handles.events{i}.spike_marker);
     % Delete the event itself from the list
     handles.events(i) = [];
+    break; % we found our handles, no need to keep looking
   end
 end
 
 % Find the event in the EEG structure
 for i = 1 : length(EEG.event)
   % If this is the right event
-  if isequalwithnans(EEG.event(i), event)
+  if isequaln(EEG.event(i), event)
     EEG.event(i) = [];
+    break; % we found our event, no need to keep looking
   end
 end
 
 % update the GUI handles
-guidata(handles.fig, handles)
+setappdata(handles.fig, 'EEG', EEG);
+guidata(handles.fig, handles);
 
 function fcn_redraw_events(object, ~)
 % function to erase all events and redraw their markers
@@ -827,11 +831,11 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % Erase all currently plotted events
 for n = 1 : length(handles.events)
-    delete(handles.events(i).bottom_marker);
-    delete(handles.events(i).top_marker);
-    delete(handles.events(i).spike_marker);
+    delete(handles.events{i}.bottom_marker);
+    delete(handles.events{i}.top_marker);
+    delete(handles.events{i}.spike_marker);
 end
-handles.events = [];
+handles.events = {};
 
 % loop through each event and draw it
 for n = 1 : length(EEG.event)
@@ -1066,12 +1070,12 @@ if isempty(event.Modifier)
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
 
-            if isfield(handles, 'events')
-                % update the event lower triangles
+            % update the event lower triangles
+            for i = 1 : length(handles.events)
+                plotted_event = handles.events{i};
+                bottom_marker = plotted_event.bottom_marker
                 y_limits = get(handles.main_ax, 'ylim');
-                relevant_handles = cell2mat(handles.events);
-                relevant_handles = relevant_handles(:,1);
-                set(relevant_handles, 'ydata', y_limits(1))
+                set(bottom_marker, 'ydata', y_limits(1))
             end
 
         case 'downarrow'
@@ -1088,12 +1092,12 @@ if isempty(event.Modifier)
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
 
-            if isfield(handles, 'events')
-                % update the event lower triangles
+            % update the event lower triangles
+            for i = 1 : length(handles.events)
+                plotted_event = handles.events{i};
+                bottom_marker = plotted_event.bottom_marker
                 y_limits = get(handles.main_ax, 'ylim');
-                relevant_handles = cell2mat(handles.events);
-                relevant_handles = relevant_handles(:,1);
-                set(relevant_handles, 'ydata', y_limits(1))
+                set(bottom_marker, 'ydata', y_limits(1))
             end
 
         case 'pageup'
