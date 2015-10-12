@@ -1,6 +1,6 @@
 function EEG = csc_eeg_plotter(varargin)
 
-%TODO: Main page 
+%TODO: Main page
         %Scale - green lines across one of the channels
         %Video scroll with space bar - reasonable speed - pause/play?
         %Auto adjust time scale on bottom for whole night
@@ -16,20 +16,23 @@ function EEG = csc_eeg_plotter(varargin)
         %Green line in front of headset
         %headset electrodes smaller due to poor resolution on my computer
 
-% TODO: Fix this ugly default setting style (e.g. handles.options...)        
+% TODO: Fix this ugly default setting style (e.g. handles.options...)
 % declare defaults
 N_DISP_CHANS = 12;
 PLOT_ICA = 0;
 EPOCH_LENGTH = 30;
 PLOT_GRID = 1;
 FILTER_OPTIONS = [0.3 40];
+N_CSC_EVENT_CODES = 2;
 
 % Set display channels
 handles.n_disp_chans = N_DISP_CHANS;
 handles.disp_chans = [1 : handles.n_disp_chans];
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
-% on the plot, but are invisible. 
+% on the plot, but are invisible.
 handles.hidden_chans = [];
+% Will be populated by fcn_redraw_events if necessary
+handles.events = [];
 % Plot normal time courses instead of component time courses by default
 handles.plotICA = PLOT_ICA;
 
@@ -52,7 +55,7 @@ handles.main_ax = axes(...
     'nextPlot',     'add'                   ,...
     'color',        [0.2, 0.2, 0.2]         ,...
     'xcolor',       [0.9, 0.9, 0.9]         ,...
-    'ycolor',       [0.9, 0.9, 0.9]         ,...  
+    'ycolor',       [0.9, 0.9, 0.9]         ,...
     'ytick',        []                      ,...
     'fontName',     'Century Gothic'        ,...
     'fontSize',     8                       );
@@ -64,8 +67,8 @@ handles.spike_ax = axes(...
     'nextPlot',     'add'                   ,...
     'color',        [0.2, 0.2, 0.2]         ,...
     'xcolor',       [0.9, 0.9, 0.9]         ,...
-    'ycolor',       [0.9, 0.9, 0.9]         ,...   
-    'ytick',        []                      ,...   
+    'ycolor',       [0.9, 0.9, 0.9]         ,...
+    'ytick',        []                      ,...
     'fontName',     'Century Gothic'        ,...
     'fontSize',     8                       );
 
@@ -84,12 +87,11 @@ handles.plot_grid = PLOT_GRID;
 handles.selection.menu = uicontextmenu;
 set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
 % TODO: move to loading stage and read from file or create these defaults
-number_of_event_types = 2;
-for n = 1:number_of_event_types
+for n = 1:N_CSC_EVENT_CODES
     handles.selection.item(n) = uimenu(handles.selection.menu,...
         'label', ['event ', num2str(n)], 'userData', n);
     set(handles.selection.item(n),...
-        'callback',     {@cb_event_selection, n});
+        'callback',     {@cb_new_event, n});
 end
 
 % create the menu bar
@@ -128,7 +130,7 @@ handles.menu.export_marked_trials = uimenu(handles.menu.options,...
     'accelerator', 't');
 
 % scroll bar
-% ~~~~~~~~~~  
+% ~~~~~~~~~~
 handles.vertical_scroll = uicontrol(...
     'Parent',   handles.fig,...
     'Units',    'normalized',...
@@ -188,43 +190,41 @@ switch nargin
     case 0
         % wait for user input
     case 1
-        
+
         % get the EEG from the input
         EEG = varargin{1};
-        
+
         % check for previously epoched data
         if EEG.trials > 1
             % flatten the third dimension into the second
             eegData = reshape(EEG.data, size(EEG.data, 1), []);
             setappdata(handles.fig, 'EEG', EEG);
             setappdata(handles.fig, 'eegData', eegData);
-            
+
             % change the epoch length to match trial length by default
             handles.epoch_length = EEG.pnts / EEG.srate;
-            
+
         else
             setappdata(handles.fig, 'EEG', EEG);
             setappdata(handles.fig, 'eegData', EEG.data);
         end
-        
+
         EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
         setappdata(handles.fig, 'EEG', EEG);
-        
+
         % allocate marked trials
         handles.trials = false(EEG.trials, 1);
         guidata(handles.fig, handles)
-        
+
         % update the plot to draw current EEG
         update_main_plot(handles.fig);
-        
-        % redraw event triangles if present
-        if isfield(EEG, 'csc_event_data')
-            fcn_redraw_events(handles.fig, []);
-        end
-        
+
+      % redraw event triangles if present
+        fcn_redraw_events(handles.fig, []);
+
         % draw trial borders on the main axes
         fcn_plot_trial_borders(handles.fig)
-        
+
     otherwise
         error('Either 0 or 1 arguments expected.');
 end
@@ -232,28 +232,23 @@ end
 % if an output is expected, wait for the figure to close
 if nargout > 0
     uiwait(handles.fig);
-    
+
     % get the handles structure
     handles = guidata(handles.fig);
-    
+
     % get the metadata
     EEG = getappdata(handles.fig, 'EEG');
 
-    % add the event table to the EEG struct
-    if isfield(handles, 'events')
-        EEG.csc_event_data = fcn_compute_events(handles);
-    end
-    
     % just add the hidden channels and trials to the data
     EEG.marked_trials = handles.trials;
     % TODO: won't work with different montages just yet
     EEG.hidden_channels = handles.hidden_chans;
-        
+
     % close the figure
-    delete(handles.fig);    
+    delete(handles.fig);
 end
 
- 
+
 % File Loading and Saving
 % ^^^^^^^^^^^^^^^^^^^^^^^
 function fcn_load_eeg(object, ~)
@@ -302,7 +297,7 @@ if ndims(EEG.data) == 3
 else
     setappdata(handles.fig, 'eegData', EEG.data);
 end
-    
+
 % plot the initial data
 update_main_plot(handles.fig);
 
@@ -341,18 +336,18 @@ if handles.plotICA == 1
   title(handles.main_ax, 'Component Activations', 'Color', 'w');
   icaData = getappdata(handles.fig, 'icaData');
   data = icaData(EEG.csc_montage.channels(handles.disp_chans, 1),range);
-  
+
 else
   title(handles.main_ax, 'Channel Activations', 'Color', 'w');
   eegData = getappdata(handles.fig, 'eegData');
-  
+
   if strcmp(EEG.csc_montage.name, 'original')
       data = eegData(handles.disp_chans, range);
-  else  
+  else
       data = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
           - eegData(EEG.csc_montage.channels(handles.disp_chans, 2), range);
   end
-  
+
   % filter the data
   % ~~~~~~~~~~~~~~~
   [EEG.filter.b, EEG.filter.a] = ...
@@ -422,18 +417,18 @@ for i = 1:handles.n_disp_chans
         'horizontalAlignment', 'center',...
         'buttondownfcn', {@fcn_toggle_channel});
 end
-                    
+
 % change the x limits of the indicator plot
 set(handles.spike_ax,   'xlim', [0, EEG.pnts * EEG.trials],...
                         'ylim', [0, 1]);
-                    
+
 % add indicator line to lower plot
 handles.indicator = line([range(1), range(1)], [0, 1],...
                         'color', [0.9, 0.9, 0.9],...
                         'linewidth', 4,...
                         'parent', handles.spike_ax,...
                         'hittest', 'off');
-                    
+
 % set the new parameters
 guidata(handles.fig, handles);
 setappdata(handles.fig, 'EEG', EEG);
@@ -676,14 +671,14 @@ for type = 1:length(no_events)
     if isempty(events{type})
         continue;
     end
-    
+
     % calculate the rows to be inserted
     % TODO: range calculation breaks for multiple event types
     range = sum(no_events(1:type - 1)) + 1 : sum(no_events(1:type));
-    
+
     % deal the event type into the event_data
     event_data(range, 1) = {get(handles.selection.item(type), 'label')};
-    
+
     % return the xdata from the handles
     % check for single event
     if numel(range) < 2
@@ -691,10 +686,10 @@ for type = 1:length(no_events)
     else
         event_data(range, 2) = get(events{type}(:,1), 'xdata');
     end
-    
+
     % add the event type number in case labels are changed
     event_data(range, 3) = {type};
-    
+
 end
 
 function cb_select_table(object, event_data)
@@ -725,7 +720,39 @@ set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 % update the time in the plotter window
 fcn_change_time(handles.csc_plotter.fig, []);
 
-function cb_event_selection(object, ~, event_type, current_point)
+function cb_new_event(object, ~, event_code, current_point)
+% functon for creating new user-defined events
+
+% get the handles
+handles = guidata(object);
+% Get the EEG from the figure's appdata
+EEG = getappdata(handles.fig, 'EEG');
+
+% Determine the latency of the new event. If the latency was not explicitly passed
+% as an argument, figure out what it should be.
+if nargin < 4
+    % current_point is where the user clicked to creat the event
+    % current_point(1) is therefore the x coord on the main axis to plot the event.
+    current_point = get(handles.main_ax, 'currentPoint');
+end
+
+% Create the event
+event = struct(...
+    'type', sprintf('csc_type_%d', event_code),...
+    'latency', current_point * EEG.srate,...
+    'duration', 0,...
+    'description', '');
+
+% Add to the event list
+EEG.event(end+1) = event;
+
+% update the GUI handles
+guidata(handles.fig, handles)
+
+% draw the event
+cb_draw_event(object, [], event);
+
+function cb_draw_event(object, ~, event)
 % get the handles
 handles = guidata(object);
 % Get the EEG from the figure's appdata
@@ -733,97 +760,112 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % get the default color order for the axes
 event_colors = get(handles.main_ax, 'ColorOrder');
-
-% check if its the first item
-if ~isfield(handles, 'events')
-   handles.events = cell(length(handles.selection.item), 1);
+% Determine what color the event marker should be.
+% Events present in the EEG structure prior to opening the plot get the first
+% color in event_colors. Events during this plotter session get a color determined
+% by their event type.
+if strncmp(event.type, 'csc_type_', length('csc_type_'));
+  event_code = sscanf(event.type, 'csc_type_%d');
+  color_code = event_code + 1; % Since color_code 1 is reserved for non csc events.
+else
+  color_code = 1;
 end
-
-% check if event latency is pre-specified
-if nargin < 4
-    current_point = get(handles.main_ax, 'currentPoint');
-end
+event_color = event_colors(color_code, :);
 
 % mark the main axes
 % ~~~~~~~~~~~~~~~~~~
-x = current_point(1);
+x = event.latency / EEG.srate;
 y = get(handles.main_ax, 'ylim');
 
 % draw bottom triangle
-handles.events{event_type}(end+1, 1) = plot(x, y(1),...
+bottom_marker = plot(x, y(1),...
     'lineStyle', 'none',...
     'marker', '^',...
     'markerSize', 20,...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
-    'markerFaceColor', event_colors(event_type, :),...
-    'userData', event_type,...
+    'markerFaceColor', event_color),...
     'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event});
+    'buttonDownFcn', {@bdf_delete_event, event});
 
 % draw top triangle
-handles.events{event_type}(end, 2) = plot(x, y(2),...
+top_marker = plot(x, y(2),...
     'lineStyle', 'none',...
     'marker', 'v',...
     'markerSize', 20,...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
-    'markerFaceColor', event_colors(event_type, :),...
-    'userData', event_type,...
+    'markerFaceColor', event_color),...
     'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event});
+    'buttonDownFcn', {@bdf_delete_event, event});
 
 % mark the spike axes
 % ~~~~~~~~~~~~~~~~~~~
 % get the y limits of the event axes
 y = get(handles.spike_ax, 'ylim');
 
-% translate the current x point into the event axes
-sample_point = floor(x * EEG.srate);
-
-handles.events{event_type}(end, 3) = line([sample_point, sample_point], y,...
+spike_marker = line([event.latency, event.latency], y,...
     'color', [0.6, 0.9, 0.9],...
     'parent', handles.spike_ax,...
-    'userData', event_type,...
     'hitTest', 'off');
+
+% store the event and its markers in the handles
+%~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+handles.events(end+1) = struct(...
+    'event', event,...
+    'bottom_marker', bottom_marker,...
+    'top_marker', top_marker,...
+    'spike_marker', spike_marker);
 
 % update the GUI handles
 guidata(handles.fig, handles)
 
-function bdf_delete_event(object, ~)
-% get the handles
+function bdf_delete_event(object, ~, event)
+% get the handles and EEG struct
 handles = guidata(object);
+EEG = getappdata(handles.fig, 'EEG')
 
-% calculate the event number
-event_type = get(object, 'userData');
-event_number = mod(find(object == handles.events{event_type}), size(handles.events{event_type}, 1));
-
-% check for event 0, which is really the last event
-if event_number == 0
-    event_number = size(handles.events{event_type}, 1);
+% Find the handles to delete
+for i = 1 : length(handles.events)
+  % If this is the right set of handles
+  if isequalwithnans(handles.events(i).event, event)
+    % delete the graphics objects associated with the event
+    delete(handles.events(i).bottom_marker);
+    delete(handles.events(i).top_marker);
+    delete(handles.events(i).spike_marker);
+    % Delete the event itself from the list
+    handles.events(i) = [];
+  end
 end
 
-% erase the object from the main and spike axes
-delete(handles.events{event_type}(event_number, :));
-
-% erase the event from the list
-handles.events{event_type}(event_number, :) = [];
+% Find the event in the EEG structure
+for i = 1 : length(EEG.event)
+  % If this is the right event
+  if isequalwithnans(EEG.event(i), event)
+    EEG.event(i) = [];
+  end
+end
 
 % update the GUI handles
 guidata(handles.fig, handles)
 
 function fcn_redraw_events(object, ~)
-% function to erase all events and redraw their markers based on the
-% csc_event_data array in the EEG structure
+% function to erase all events and redraw their markers
 
 % get the handles
 handles = guidata(object);
 % Get the EEG from the figure's appdata
 EEG = getappdata(handles.fig, 'EEG');
 
-% TODO check for current events and delete their handles
+% Erase all currently plotted events
+for n = 1 : length(handles.events)
+    delete(handles.events(i).bottom_marker);
+    delete(handles.events(i).top_marker);
+    delete(handles.events(i).spike_marker);
+end
+handles.events = [];
 
-% loop through each event
-for n = 1:size(EEG.csc_event_data, 1)
-    cb_event_selection(object, [], EEG.csc_event_data{n, 3}, EEG.csc_event_data{n, 2})
+% loop through each event and draw it
+for n = 1 : length(EEG.event)
+    cb_draw_event(object, [], EEG.event(n));
 end
 
 function fcn_plot_trial_borders(object, ~)
@@ -887,7 +929,7 @@ EEG = getappdata(handles.fig, 'EEG');
 
 switch type
     case 'disp_chans'
-     
+
         % No answer, no change
         answer = inputdlg('channels to display (number or range)','', 1);
 
@@ -896,7 +938,7 @@ switch type
           return
         end
 
-        answer = strsplit(answer{1}, ':'); 
+        answer = strsplit(answer{1}, ':');
 
         if length(answer) > 2 %for example '1:2:5' was provided as input
           fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing.\n');
@@ -906,12 +948,12 @@ switch type
         if length(answer) == 1 %if a number was provided
           % if more channels were requested than exist in the montage, take the number in the montage
           handles.n_disp_chans = min(str2double(answer{1}),...
-                                     length(EEG.csc_montage.label_channels)); 
+                                     length(EEG.csc_montage.label_channels));
           handles.disp_chans = [1 : handles.n_disp_chans];
-          
+
         else %length(answer) == 2, so a range was provided
           disp_chans = [str2double(answer{1}) : str2double(answer{2})];
-          
+
           if isempty(disp_chans) %if bogus input like '99:12' was provided
             fprintf(1, 'Warning: You did not select a valid channel range. Doing nothing\n');
             return
@@ -920,36 +962,36 @@ switch type
             handles.n_disp_chans = length(handles.disp_chans);
           end
         end
-        
+
         % when changing the number of channels go back to 1
         handles.vertical_scroll.Value = -1;
-        
+
         % update the handles and re-plot
         guidata(object, handles);
         update_main_plot(object);
-        
+
     case 'epoch_length'
-        
+
         answer = inputdlg('length of epoch',...
             '', 1, {num2str( handles.epoch_length )});
-        
+
         % if different from previous
         if ~isempty(answer)
             newNumber = str2double(answer{1});
-            if newNumber ~= handles.epoch_length 
+            if newNumber ~= handles.epoch_length
                 handles.epoch_length = newNumber;
 
                 guidata(object, handles);
                 update_main_plot(object)
             end
         end
-        
+
     case 'filter_settings'
-        
+
         answer = inputdlg({'low cut-off', 'high cut-off'},...
             '', 1, {num2str( handles.filter_options(1)),...
                     num2str( handles.filter_options(2))});
-        
+
         % get and set the new values
         new_values = str2double(answer);
         if ~isequal(new_values, handles.filter_options')
@@ -957,7 +999,7 @@ switch type
             guidata(object, handles);
             update_main_plot(object);
         end
-    
+
     case 'icatoggle'
 
         answer = questdlg('What would you like to display?',...
@@ -982,7 +1024,7 @@ switch type
         end
         guidata(object, handles);
         update_main_plot(object);
-        
+
     case 'export_hidden_chans'
         % export the hidden channels
         var_name = inputdlg('Workspace variable to export to?',...
@@ -1002,7 +1044,7 @@ switch type
         refs = mat2cell(refs, ones(length(handles.hidden_chans), 1), ones(2, 1));
         selected_channels = [labels refs];
         assignin('base', var_name, selected_channels);
-        
+
     case 'export_marked_trials'
         % export the marked trials
         var_name = inputdlg('Workspace variable to export to?',...
@@ -1033,13 +1075,13 @@ if isempty(event.Modifier)
             set(handles.cPoint, 'Value',...
                 get(handles.cPoint, 'Value') - handles.epoch_length*EEG.srate);
             fcn_change_time(object, [])
-            
+
         case 'rightarrow'
             % move to the next epoch
             set(handles.cPoint, 'Value',...
                 get(handles.cPoint, 'Value') + handles.epoch_length*EEG.srate);
             fcn_change_time(object, [])
-            
+
         case 'uparrow'
             scale = get(handles.txt_scale, 'value');
             if scale <= 20
@@ -1049,19 +1091,19 @@ if isempty(event.Modifier)
                 value = scale - 20;
                 set(handles.txt_scale, 'value', value);
             end
-            
+
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
-            
+
             if isfield(handles, 'events')
                 % update the event lower triangles
                 y_limits = get(handles.main_ax, 'ylim');
                 relevant_handles = cell2mat(handles.events);
-                relevant_handles = relevant_handles(:,1); 
+                relevant_handles = relevant_handles(:,1);
                 set(relevant_handles, 'ydata', y_limits(1))
             end
-            
+
         case 'downarrow'
             scale = get(handles.txt_scale, 'value');
             if scale <= 20
@@ -1071,47 +1113,47 @@ if isempty(event.Modifier)
                 value = scale + 20;
                 set(handles.txt_scale, 'value', value);
             end
-            
+
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
-            
+
             if isfield(handles, 'events')
                 % update the event lower triangles
                 y_limits = get(handles.main_ax, 'ylim');
                 relevant_handles = cell2mat(handles.events);
-                relevant_handles = relevant_handles(:,1); 
+                relevant_handles = relevant_handles(:,1);
                 set(relevant_handles, 'ydata', y_limits(1))
             end
 
         case 'pageup'
-            
+
             % get the current top visible channel
             top_channel = -handles.vertical_scroll.Value;
-            
+
             if top_channel - handles.n_disp_chans < 1
                 handles.vertical_scroll.Value = -1;
             else
-                handles.vertical_scroll.Value = -(top_channel - handles.n_disp_chans); 
+                handles.vertical_scroll.Value = -(top_channel - handles.n_disp_chans);
             end
-            
+
             % redraw the plot by calling the scroll callback
-            cb_scrollbar(handles.vertical_scroll, []);            
+            cb_scrollbar(handles.vertical_scroll, []);
 
         case 'pagedown'
-            
+
             % get the current top visible channel
             bottom_channel = -handles.vertical_scroll.Value + handles.n_disp_chans -1;
-            
+
             if bottom_channel + handles.n_disp_chans > -handles.vertical_scroll.Min
                 handles.vertical_scroll.Value = handles.vertical_scroll.Min;
             else
                 handles.vertical_scroll.Value = -(bottom_channel + 1);
             end
-            
+
             % redraw the plot by calling the scroll callback
-            cb_scrollbar(handles.vertical_scroll, []);            
-            
+            cb_scrollbar(handles.vertical_scroll, []);
+
         case 'g'
           handles.plot_grid = ~handles.plot_grid;
           guidata(object, handles);
@@ -1121,27 +1163,27 @@ if isempty(event.Modifier)
 
 % check whether the ctrl is pressed also
 elseif strcmp(event.Modifier, 'control')
-    
+
     switch event.Key
         case 'c'
             %TODO: pop_up for channel number
-            
+
         case 'uparrow'
             %             fprintf(1, 'more channels \n');
-            
+
         case 'leftarrow'
             % move a little to the left
             set(handles.cPoint, 'Value',...
                 get(handles.cPoint, 'Value') - handles.epoch_length/5 * EEG.srate);
             fcn_change_time(object, [])
-            
+
         case 'rightarrow'
             % move a little to the right
             set(handles.cPoint, 'Value',...
                 get(handles.cPoint, 'Value') + handles.epoch_length/5 * EEG.srate);
             fcn_change_time(object, [])
     end
-    
+
 end
 
 
@@ -1172,7 +1214,7 @@ handles.main_ax = axes(...
     'color',        [0.2, 0.2, 0.2]         ,...
     'xcolor',       [0.9, 0.9, 0.9]         ,...
     'ycolor',       [0.9, 0.9, 0.9]         ,...
-    'xtick',        []                      ,...    
+    'xtick',        []                      ,...
     'ytick',        []                      ,...
     'fontName',     'Century Gothic'        ,...
     'fontSize',     8                       );
@@ -1212,13 +1254,13 @@ set(handles.montage_list, 'callback', {@fcn_select_montage});
 % create the save button
 handles.save_montage = uicontrol(...
     'parent',       handles.fig,...
-    'style',        'push',...    
+    'style',        'push',...
     'string',       '+',...
     'foregroundColor', 'k',...
     'units',        'normalized',...
     'position',     [0.275 0.93 0.02 0.02],...
     'fontName',     'Century Gothic',...
-    'fontWeight',   'bold',...   
+    'fontWeight',   'bold',...
     'fontSize',     10);
 set(handles.save_montage, 'callback', {@fcn_save_montage});
 
@@ -1242,26 +1284,26 @@ jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
 % create the buttons
 handles.button_delete = uicontrol(...
     'Parent',   handles.fig,...
-    'Style',    'push',...    
+    'Style',    'push',...
     'String',   'delete',...
     'ForegroundColor', 'k',...
     'Units',    'normalized',...
     'Position', [0.75 0.075 0.05 0.02],...
     'FontName', 'Century Gothic',...
-    'FontWeight', 'bold',...   
+    'FontWeight', 'bold',...
     'FontSize', 10);
 
 set(handles.button_delete, 'callback', {@fcn_button_delete});
 
 handles.button_apply = uicontrol(...
     'Parent',   handles.fig,...
-    'Style',    'push',...    
+    'Style',    'push',...
     'String',   'apply',...
     'ForegroundColor', 'k',...
     'Units',    'normalized',...
     'Position', [0.85 0.075 0.05 0.02],...
     'FontName', 'Century Gothic',...
-    'FontWeight', 'bold',...   
+    'FontWeight', 'bold',...
     'FontSize', 10);
 
 set(handles.button_apply, 'callback', {@fcn_button_apply});
@@ -1287,7 +1329,7 @@ handles  = guidata(montage_handle);
 EEG = getappdata(handles.csc_plotter.fig, 'EEG');
 
 if ~isfield(EEG.chanlocs(1), 'x')
-   EEG.chanlocs = swa_add2dlocations(EEG.chanlocs); 
+   EEG.chanlocs = swa_add2dlocations(EEG.chanlocs);
 end
 
 x = [EEG.chanlocs.x];
@@ -1307,7 +1349,7 @@ for n = 1:length(EEG.chanlocs)
         'markeredgecolor', [0.08, 0.08, 0.08],...
         'selectionHighlight', 'off',...
         'userData', n);
-    
+
     handles.txt_labels(n) = text(...
         y(n), x(n), labels{n},...
         'parent', handles.main_ax,...
@@ -1364,7 +1406,7 @@ handles = guidata(object);
 
 % get the mouse button
 event = get(handles.fig, 'selectionType');
-ch    = get(object, 'userData');  
+ch    = get(object, 'userData');
 
 switch event
     case 'normal'
@@ -1372,13 +1414,13 @@ switch event
         data{end+1, 1} = [num2str(ch), ' - '];
         data{end, 2} = ch;
         set(handles.table, 'data', data);
-        
+
     case 'alt'
         data = get(handles.table, 'data');
         ind  = cellfun(@(x) isempty(x), data(:,3));
         data(ind,3) = deal({ch});
         set(handles.table, 'data', data);
-        
+
         % replot the arrows
         update_net_arrows(handles.fig)
 end
@@ -1515,5 +1557,3 @@ new_index = find(strcmp(fileName, montage_list));
 set(handles.montage_list,...
     'string', montage_list,...
     'value', new_index);
-
-
