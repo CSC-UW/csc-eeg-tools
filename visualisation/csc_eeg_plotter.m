@@ -308,11 +308,6 @@ handles = guidata(object);
 % get the EEG from the figure's appdata
 EEG = getappdata(handles.fig, 'EEG');
 
-% add the event table to the EEG struct
-if isfield(handles, 'events')
-    EEG.csc_event_data = fcn_compute_events(handles);
-end
-
 % Ask where to put file...
 [saveFile, savePath] = uiputfile('*.set');
 
@@ -602,11 +597,12 @@ end
 % Event Functions
 % ^^^^^^^^^^^^^^^
 function fcn_event_browser(object, ~)
-% get the handles
+% get the handles and EEG struct
 handles.csc_plotter = guidata(object);
+EEG = getappdata(handles.csc_plotter, 'EEG');
 
 % check if any events exist
-if ~isfield(handles.csc_plotter, 'events')
+if ~isfield(EEG, 'event') || isempty(EEG.event)
     fprintf(1, 'Warning: No events were found in the data \n');
     return
 end
@@ -626,7 +622,7 @@ handles.table = uitable(...
     'position',     [0.05, 0.1, 0.9, 0.8]   ,...
     'backgroundcolor', [0.1, 0.1, 0.1; 0.2, 0.2, 0.2],...
     'foregroundcolor', [0.9, 0.9, 0.9]      ,...
-    'columnName',   {'label','time', 'type'});
+    'columnName',   {'time', 'type', 'description'});
 
 % get the underlying java properties
 jscroll = findjobj(handles.table);
@@ -645,51 +641,30 @@ jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
 set(handles.table, 'cellSelectionCallback', {@cb_select_table});
 
 % calculate the event_data from the handles
-event_data = fcn_compute_events(handles.csc_plotter);
+table_data = fcn_event_table_data(handles.csc_plotter);
 
 % put the data into the table
-set(handles.table, 'data', event_data);
+set(handles.table, 'data', table_data);
 
 % update the GUI handles
 guidata(handles.fig, handles)
 
-function event_data = fcn_compute_events(handles, ~)
+function table_data = fcn_event_table_data(handles, ~)
 % function used to create the event_table from the handle structure
 
-% pull out the events from the handles structure
-events = handles.events;
+% pull out the plotted events and EEG from the handles structure
+plotted_events = handles.events;
+EEG = getappdata(handles.fig, 'EEG');
 
-% calculate the number of events
-no_events = cellfun(@(x) size(x,1), events);
+% pre-allocate the table data
+table_data = cell(length(plotted_events), 3);
 
-% pre-allocate the event data
-event_data = cell(sum(no_events), 3);
-
-% loop for each event type
-for type = 1:length(no_events)
-    % skip event type if there are no events
-    if isempty(events{type})
-        continue;
-    end
-
-    % calculate the rows to be inserted
-    % TODO: range calculation breaks for multiple event types
-    range = sum(no_events(1:type - 1)) + 1 : sum(no_events(1:type));
-
-    % deal the event type into the event_data
-    event_data(range, 1) = {get(handles.selection.item(type), 'label')};
-
-    % return the xdata from the handles
-    % check for single event
-    if numel(range) < 2
-        event_data(range, 2) = {get(events{type}(:,1), 'xdata')};
-    else
-        event_data(range, 2) = get(events{type}(:,1), 'xdata');
-    end
-
-    % add the event type number in case labels are changed
-    event_data(range, 3) = {type};
-
+% Populate the table data
+for i = 1 : length(plotted_events)
+  event = plotted_events(i).event;
+  table_data(i, 1) = event.latency / EEG.srate; % time
+  table_data(i, 2) = event.type;
+  table_data(i, 3) = event.description;
 end
 
 function cb_select_table(object, event_data)
@@ -697,21 +672,16 @@ function cb_select_table(object, event_data)
 
 % get the handles
 handles = guidata(object);
-
 % get the data
 EEG = getappdata(handles.csc_plotter.fig, 'EEG');
 
-% if the event column was selected return
-if event_data.Indices(2) == 1
-    return
-end
-
 % return the data from the table
 table_data = get(object, 'data');
+selected_row = event_data.Indicies(1);
 
 % retrieve the time from the table
-selected_time = table_data{event_data.Indices(1), 2};
-go_to_time = selected_time - handles.epoch_length/2;
+selected_time = table_data{selected_row, 1};
+go_to_time = selected_time - handles.epoch_length/2; % so event is centered in window
 selected_sample = floor(go_to_time * EEG.srate);
 
 % change the hidden time keeper
