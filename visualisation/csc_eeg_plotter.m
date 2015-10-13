@@ -650,14 +650,19 @@ handles.fig = figure(...
     'units',        'normalized',...
     'outerPosition',[0 0.5 0.1 0.5]);
 
-% montage table
+% browser table
 handles.table = uitable(...
     'parent',       handles.fig             ,...
     'units',        'normalized'            ,...
     'position',     [0.05, 0.1, 0.9, 0.8]   ,...
     'backgroundcolor', [0.1, 0.1, 0.1; 0.2, 0.2, 0.2],...
     'foregroundcolor', [0.9, 0.9, 0.9]      ,...
-    'columnName',   {'time', 'type', 'description'});
+    'tag', 'event browser table',...
+    'columnName', {'show', 'time', 'type', 'description'},...
+    'columnFormat', {'logical', 'numeric', 'char', 'char'},...
+    'columnEditable', [true, false, false, false],...
+    'cellSelectionCallback', {@cb_select_event_cell},...
+    'cellEditCallback', {@cb_edit_event_cell, handles.csc_plotter});
 
 % get the underlying java properties
 jscroll = findjobj(handles.table);
@@ -671,9 +676,6 @@ jtable.setMultiColumnSortable(true);
 
 % auto-adjust the column width
 jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
-
-% set the callback for table cell selection
-set(handles.table, 'cellSelectionCallback', {@cb_select_table});
 
 % calculate the event_data from the handles
 table_data = fcn_event_table_data(handles.csc_plotter);
@@ -693,18 +695,62 @@ plotted_events = handles.events;
 EEG = getappdata(handles.fig, 'EEG');
 
 % pre-allocate the table data
-table_data = cell(length(plotted_events), 3);
+table_data = cell(length(plotted_events), 4);
 
 % Populate the table data
 for i = 1 : length(plotted_events)
   event = plotted_events{i}.event;
-  table_data{i, 1} = event.latency / EEG.srate; % time
-  table_data{i, 2} = event.type;
-  table_data{i, 3} = event.description;
+  isEventVisible = (strcmp(plotted_events{i}.bottom_marker.Visible, 'on') || ...
+                    strcmp(plotted_events{i}.top_marker.Visible, 'on') || ...
+                    strcmp(plotted_events{i}.spike_marker.Visible, 'on'));
+  table_data{i, 1} = isEventVisible;
+  table_data{i, 2} = event.latency / EEG.srate; % time
+  table_data{i, 3} = event.type;
+  table_data{i, 4} = event.description;
 end
 end % end function
 
-function cb_select_table(object, event_data)
+function cb_edit_event_cell(srcObj, uiEvent, plotterHandles)
+% Called when a cell in the event browser is edited.
+
+editedRow = uiEvent.Indices(1);
+editedCol = uiEvent.Indices(2);
+
+table_data = get(srcObj, 'Data');
+column_fmts = get(srcObj, 'ColumnFormat');
+column_names = get(srcObj, 'ColumnName');
+
+% make sure the user is trying to hide/show an event
+assert(strcmp(column_names{editedCol}, 'show'));
+assert(strcmp(column_fmts{editedCol}, 'logical'));
+
+% Figure out what the event's visibility shoudl be set to.
+if uiEvent.EditData
+  visibility = 'on';
+else
+  visibility = 'off';
+end
+
+% Find the event whose visibility we need to change
+plotted_events = plotterHandles.events;
+EEG = getappdata(plotterHandles.fig, 'EEG');
+for i = 1 : length(plotted_events)
+    event = plotted_events{i}.event;
+    latenciesMatch = (table_data{editedRow, 2} == (event.latency / EEG.srate));
+    typesMatch = strcmp(table_data{editedRow, 3}, event.type);
+    descriptionsMatch = strcmp(table_data{editedRow, 4}, event.description);
+    if latenciesMatch && typesMatch && descriptionsMatch
+      % we found the event, so change its visiibility
+      plotted_events{i}.bottom_marker.Visible = visibility;
+      plotted_events{i}.top_marker.Visible = visibility;
+      plotted_events{i}.spike_marker.Visible = visibility;
+      break; % we found our event, so we're done
+    end
+end
+
+end % end function
+
+function cb_select_event_cell(object, event_data)
 % when a cell in the table is selected, jump to that time point
 
 % get the handles
@@ -773,6 +819,16 @@ guidata(handles.fig, handles)
 
 % draw the event
 cb_draw_event(object, [], event);
+
+% get the handles, since they may have updated during drawing
+handles = guidata(object);
+% update the event browser if it exists
+% THIS WILL BREAK IF MULTIPLE WINDOW ARE OPEN. App needs to be encapsulated.
+browser_table = findobj('type', 'uitable', 'tag', 'event browser table');
+if ~isempty(browser_table)
+  browser_table.Data = fcn_event_table_data(handles);
+end
+
 end % end function
 
 function cb_draw_event(object, ~, event)
@@ -899,6 +955,16 @@ end
 % update the GUI handles
 setappdata(handles.fig, 'EEG', EEG);
 guidata(handles.fig, handles);
+
+% update the event browser if it exists
+% THIS WILL BREAK IF MULTIPLE WINDOW ARE OPEN. App needs to be encapsulated.
+browser_table = findobj('type', 'uitable', 'tag', 'event browser table');
+if ~isempty(browser_table)
+  browser_table.Data = fcn_event_table_data(handles);
+end
+
+% clear the event banner
+handles.event_banner.UserData = [];
 end % end function
 
 function fcn_redraw_events(object, ~)
