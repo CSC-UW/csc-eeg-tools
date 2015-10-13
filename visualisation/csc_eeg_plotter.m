@@ -159,6 +159,19 @@ handles.cPoint = uicontrol(...
     'Visible',  'off',...
     'Value',    1);
 
+% static text box above navigation axis for displaying selected event data
+handles.event_banner = uicontrol(...
+    'Parent', handles.fig,...
+    'Style', 'text',...
+    'String', '',...
+    'fontName', 'Century Gothic',...
+    'fontSize', 10,...
+    'horizontalAlignment', 'left',...
+    'BackgroundColor', [0.1 0.1 0.1],...
+    'ForegroundColor', [0.9 0.9 0.9],...
+    'Units', 'normalized',...
+    'Position', [0.05 0.14 0.9 0.0326]);
+
 % set the callbacks
 % ~~~~~~~~~~~~~~~~~
 set(handles.fig, 'closeRequestFcn', {@fcn_close_window});
@@ -247,8 +260,7 @@ if nargout > 0
     % close the figure
     delete(handles.fig);
 end
-
-
+end % end function
 % File Loading and Saving
 % ^^^^^^^^^^^^^^^^^^^^^^^
 function fcn_load_eeg(object, ~)
@@ -300,6 +312,7 @@ end
 
 % plot the initial data
 update_main_plot(handles.fig);
+end % end function
 
 function fcn_save_eeg(object, ~)
 % get the handles from the figure
@@ -313,6 +326,7 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % since the data has not changed we can just save the EEG part, not the data
 save(fullfile(savePath, saveFile), 'EEG', '-mat');
+end % end function
 
 function update_main_plot(object)
 % get the handles structure
@@ -427,6 +441,7 @@ handles.indicator = line([range(1), range(1)], [0, 1],...
 % set the new parameters
 guidata(handles.fig, handles);
 setappdata(handles.fig, 'EEG', EEG);
+end % end function
 
 function cb_scrollbar(object, ~)
 % callback to the change the displayed channels
@@ -448,6 +463,7 @@ end
 % update the handles and replot the data
 guidata(handles.fig, handles);
 update_main_plot(object);
+end % end function
 
 function fcn_change_time(object, ~)
 % get the handles from the guidata
@@ -478,6 +494,7 @@ setappdata(handles.fig, 'EEG', EEG);
 
 % update all the axes
 update_main_plot(handles.fig);
+end % end function
 
 function fcn_toggle_channel(object, ~)
 % get the handles from the guidata
@@ -500,6 +517,7 @@ switch state
       handles.hidden_chans = handles.hidden_chans(handles.hidden_chans ~= ch);
 end
 guidata(object, handles);
+end % end function
 
 function fcn_time_select(object, ~)
 handles = guidata(object);
@@ -509,6 +527,7 @@ clicked_position = get(handles.spike_ax, 'currentPoint');
 
 set(handles.cPoint, 'Value', floor(clicked_position(1,1)));
 fcn_change_time(object, []);
+end % end function
 
 function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
 
@@ -586,6 +605,7 @@ set(handles.menu.montage, 'enable', 'on');
 % reset the scrollbar values
 handles.vertical_scroll.Max = -1;
 handles.vertical_scroll.Min = -(eegMeta.nbchan - length(handles.disp_chans) + 1);
+end % end function
 
 function fcn_close_window(object, ~)
 % just resume the ui if the figure is closed
@@ -607,7 +627,7 @@ switch current_status
         % close the figure
         delete(handles.fig);
 end
-
+end % end function
 
 % Event Functions
 % ^^^^^^^^^^^^^^^
@@ -663,6 +683,7 @@ set(handles.table, 'data', table_data);
 
 % update the GUI handles
 guidata(handles.fig, handles)
+end % end function
 
 function table_data = fcn_event_table_data(handles, ~)
 % function used to create the event_table from the handle structure
@@ -681,6 +702,7 @@ for i = 1 : length(plotted_events)
   table_data{i, 2} = event.type;
   table_data{i, 3} = event.description;
 end
+end % end function
 
 function cb_select_table(object, event_data)
 % when a cell in the table is selected, jump to that time point
@@ -704,6 +726,7 @@ set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 
 % update the time in the plotter window
 fcn_change_time(handles.csc_plotter.fig, []);
+end % end function
 
 function cb_new_event(object, ~, event_code, current_point)
 % functon for creating new user-defined events
@@ -750,6 +773,7 @@ guidata(handles.fig, handles)
 
 % draw the event
 cb_draw_event(object, [], event);
+end % end function
 
 function cb_draw_event(object, ~, event)
 % get the handles
@@ -784,7 +808,12 @@ bottom_marker = plot(x, y(1),...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
     'markerFaceColor', event_color,...
     'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event, event});
+    'UIContextMenu', uicontextmenu(),...
+    'ButtonDownFcn', {@cb_update_event_banner, event});
+% Add a conext menu to the triangle that the user can use to delete it
+uimenu(bottom_marker.UIContextMenu,...
+    'Label', 'Delete Event',...
+    'Callback', {@bdf_delete_event, event});
 
 % draw top triangle
 top_marker = plot(x, y(2),...
@@ -794,7 +823,28 @@ top_marker = plot(x, y(2),...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
     'markerFaceColor', event_color,...
     'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event, event});
+    'UIContextMenu', uicontextmenu(),...
+    'buttonDownFcn', {@cb_update_event_banner, event});
+% Add a conext menu to the triangle that the user can use to delete it
+uimenu(top_marker.UIContextMenu,...
+    'Label', 'Delete Event',...
+    'Callback', {@bdf_delete_event, event});
+
+    function cb_update_event_banner(src, ~, event)
+      % First, update event banner text
+      bannerText = [event.type ': ' event.description];
+      handles.event_banner.String = bannerText;
+      % Second, reset the previously selected event triangels to the proper size
+      if ~isempty(handles.event_banner.UserData)
+        handles.event_banner.UserData.bottom_marker.MarkerSize = 10;
+        handles.event_banner.UserData.top_marker.MarkerSize = 10;
+      end
+      % Third, enlarge the newly selected event triangeles and store refs in banner
+      bottom_marker.MarkerSize = 20;
+      top_marker.MarkerSize = 20;
+      handles.event_banner.UserData.bottom_marker = bottom_marker;
+      handles.event_banner.UserData.top_marker = top_marker;
+    end
 
 % mark the spike axes
 % ~~~~~~~~~~~~~~~~~~~
@@ -816,6 +866,7 @@ handles.events{end+1} = struct(...
 
 % update the GUI handles
 guidata(handles.fig, handles)
+end % end function
 
 function bdf_delete_event(object, ~, event)
 % get the handles and EEG struct
@@ -848,6 +899,7 @@ end
 % update the GUI handles
 setappdata(handles.fig, 'EEG', EEG);
 guidata(handles.fig, handles);
+end % end function
 
 function fcn_redraw_events(object, ~)
 % function to erase all events and redraw their markers
@@ -869,6 +921,7 @@ handles.events = {};
 for n = 1 : length(EEG.event)
     cb_draw_event(object, [], EEG.event(n));
 end
+end % end function
 
 function fcn_plot_trial_borders(object, ~)
 % function to plot the borders of trials for epoched data
@@ -901,6 +954,7 @@ handles.trial_borders = plot(x, y(1),...
 
 % update the GUI handles
 guidata(handles.fig, handles)
+end % end function
 
 function bdf_mark_trial(object, ~)
 % get the handles
@@ -919,7 +973,7 @@ end
 
 % update the GUI handles
 guidata(handles.fig, handles)
-
+end % end function
 
 % Options Menu and their Keyboard Shortcuts
 % ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -1063,6 +1117,7 @@ switch type
         end
         assignin('base', var_name, handles.trials);
 end
+end % end function
 
 function cb_key_pressed(object, event)
 % get the relevant data
@@ -1187,7 +1242,7 @@ elseif strcmp(event.Modifier, 'control')
     end
 
 end
-
+end % end function
 
 % Montage Functions
 % ^^^^^^^^^^^^^^^^^
@@ -1324,6 +1379,7 @@ guidata(handles.fig, handles);
 
 % plot the net
 plot_net(handles.fig)
+end % end function
 
 function plot_net(montage_handle)
 % get the handles and EEG structure
@@ -1370,6 +1426,7 @@ guidata(handles.fig, handles);
 setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 update_net_arrows(handles.fig)
+end % end function
 
 function update_net_arrows(montage_handle)
 % get the handles and EEG structure
@@ -1401,6 +1458,7 @@ uistack(handles.plt_markers, 'top');
 uistack(handles.txt_labels, 'top');
 
 guidata(handles.fig, handles);
+end % end function
 
 function bdf_select_channel(object, ~)
 % get the handles
@@ -1428,6 +1486,7 @@ switch event
 end
 
 set(handles.montage_list, 'value', 1);
+end % end function
 
 function fcn_button_delete(object, ~)
 % get the handles
@@ -1444,6 +1503,7 @@ set(handles.table, 'data', data);
 
 % update the arrows on the montage plot
 update_net_arrows(handles.fig)
+end % end function
 
 function fcn_button_apply(object, ~)
 % get the montage handles
@@ -1482,6 +1542,7 @@ setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 % update the plot using the scrollbar callback
 % update_main_plot(handles.csc_plotter.fig);
 cb_scrollbar(handles.csc_plotter.vertical_scroll, []);
+end % end function
 
 function fcn_select_montage(object, ~)
 % get the montage handles
@@ -1517,6 +1578,7 @@ setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 % update the arrows on the montage plot
 update_net_arrows(handles.fig)
+end % end function
 
 function fcn_save_montage(object, ~)
 % get the montage handles
@@ -1559,3 +1621,4 @@ new_index = find(strcmp(fileName, montage_list));
 set(handles.montage_list,...
     'string', montage_list,...
     'value', new_index);
+end % end function
