@@ -533,7 +533,7 @@ function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
 
 handles = guidata(object);
 
-if isfield(eegMeta, 'event')
+if isfield(eegMeta, 'event') && ~isempty(eegMeta.event)
   % Confirm that events in EEGlab event structure meet EEGLab specs
   assert(isfield(eegMeta.event, 'type'));
   assert(isfield(eegMeta.event, 'latency'));
