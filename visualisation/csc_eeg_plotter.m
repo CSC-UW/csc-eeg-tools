@@ -307,11 +307,14 @@ if ndims(EEG.data) == 3
     eegData = reshape(EEG.data, size(EEG.data, 1), []);
     setappdata(handles.fig, 'eegData', eegData);
 else
-    setappdata(handles.fig, 'eegData', EEG.data);
+    setappdata(handles.fig, 'eegData', eegData);
 end
 
 % plot the initial data
 update_main_plot(handles.fig);
+
+% plot events markers
+fcn_redraw_events(handles.fig, []);
 end % end function
 
 function fcn_save_eeg(object, ~)
