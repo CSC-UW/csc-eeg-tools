@@ -15,8 +15,8 @@ function EEG = csc_eeg_plotter(varargin)
 %TODO: Montage
         %Green line in front of headset
         %headset electrodes smaller due to poor resolution on my computer
-
-% TODO: Fix this ugly default setting style (e.g. handles.options...)        
+       
+% TODO: Fix this ugly default setting style (e.g. handles.options...)    
 % declare defaults
 N_DISP_CHANS = 12;
 PLOT_ICA = 0;
@@ -114,6 +114,9 @@ handles.menu.disp_chans = uimenu(handles.menu.options,...
 handles.menu.epoch_length = uimenu(handles.menu.options,...
     'label', 'epoch length',...
     'accelerator', 'e');
+handles.menu.filter_toggle = uimenu(handles.menu.options,...
+    'label', 'filter toggle',...
+    'checked', 'on');
 handles.menu.filter_settings = uimenu(handles.menu.options,...
     'label', 'filter settings',...
     'accelerator', 'f');
@@ -168,6 +171,7 @@ set(handles.menu.events,    'callback', {@fcn_event_browser});
 
 set(handles.menu.disp_chans,   'callback', {@fcn_options, 'disp_chans'});
 set(handles.menu.epoch_length, 'callback', {@fcn_options, 'epoch_length'});
+set(handles.menu.filter_toggle, 'callback', {@fcn_options, 'filter_toggle'});
 set(handles.menu.filter_settings, 'callback', {@fcn_options, 'filter_settings'});
 set(handles.menu.icatoggle,    'callback', {@fcn_options, 'icatoggle'});
 set(handles.menu.export_hidden_chans, 'callback',...
@@ -203,6 +207,8 @@ switch nargin
             handles.epoch_length = EEG.pnts / EEG.srate;
             
         else
+            eegData = EEG.data;
+            
             setappdata(handles.fig, 'EEG', EEG);
             setappdata(handles.fig, 'eegData', EEG.data);
         end
@@ -250,7 +256,11 @@ if nargout > 0
     EEG.hidden_channels = handles.hidden_chans;
         
     % close the figure
-    delete(handles.fig);    
+    delete(handles.fig);
+    
+else
+    % return an empty variable
+    EEG = [];
 end
 
  
@@ -355,10 +365,13 @@ else
   
   % filter the data
   % ~~~~~~~~~~~~~~~
-  [EEG.filter.b, EEG.filter.a] = ...
+  if strcmp(get(handles.menu.filter_toggle, 'checked'), 'on')
+      
+      [EEG.filter.b, EEG.filter.a] = ...
           butter(2,[handles.filter_options(1)/(EEG.srate/2),...
-                    handles.filter_options(2)/(EEG.srate/2)]);
-  data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))');
+          handles.filter_options(2)/(EEG.srate/2)]);
+      data = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data'))');
+  end
 end
 
 
@@ -447,7 +460,7 @@ EEG = getappdata(handles.fig, 'EEG');
 new_start = -ceil(handles.vertical_scroll.Value);
 
 % check whether new_start and potential end make sense
-total_channels = length(EEG.csc_montage.channels(:, 1));
+total_channels = EEG.nbchan;
 if new_start + handles.n_disp_chans - 1 < total_channels
     % change the indices of displayed channels
     handles.disp_chans = new_start : new_start + handles.n_disp_chans - 1;
@@ -534,16 +547,24 @@ if isempty(eegMeta.chanlocs)
     end
 end
 
+if isfield(eegMeta, 'csc_montage')
+    if length(eegMeta.csc_montage.label_channels) ~= eegMeta.nbchan
+        fprintf(1, 'Warning: Montage does not match data; resetting \n');
+        eegMeta = rmfield(eegMeta, 'csc_montage');
+        eegMeta = rmfield(eegMeta, 'csc_event_data');
+    end
+end
+
 % check for previous
 if ~isfield(eegMeta, 'csc_montage')
     % assign defaults
     eegMeta.csc_montage.name = 'original';
-    eegMeta.csc_montage.label_channels      = cell(eegMeta.nbchan, 1);
+    eegMeta.csc_montage.label_channels = cell(eegMeta.nbchan, 1);
     for n = 1 : eegMeta.nbchan
         eegMeta.csc_montage.label_channels(n) = {num2str(n)};
     end
-    eegMeta.csc_montage.channels(:, 1)       = 1:eegMeta.nbchan;
-    eegMeta.csc_montage.channels(:, 2)       = eegMeta.nbchan;
+    eegMeta.csc_montage.channels(:, 1) = 1:eegMeta.nbchan;
+    eegMeta.csc_montage.channels(:, 2) = eegMeta.nbchan;
 end
 
 % load ICA time courses if the information need to construct them is available.
@@ -942,6 +963,16 @@ switch type
                 guidata(object, handles);
                 update_main_plot(object)
             end
+        end
+           
+    case 'filter_toggle'
+        % apply online filter to the data or not
+        
+        switch get(handles.menu.filter_toggle, 'checked')
+            case 'on'
+                set(handles.menu.filter_toggle, 'checked', 'off');
+            case 'off'
+                set(handles.menu.filter_toggle, 'checked', 'on');
         end
         
     case 'filter_settings'
