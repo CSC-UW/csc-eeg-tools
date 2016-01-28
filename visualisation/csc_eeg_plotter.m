@@ -1088,9 +1088,17 @@ if isempty(event.Modifier)
             if isfield(handles, 'events')
                 % update the event lower triangles
                 y_limits = get(handles.main_ax, 'ylim');
-                relevant_handles = cell2mat(handles.events);
-                relevant_handles = relevant_handles(:,1); 
-                set(relevant_handles, 'ydata', y_limits(1))
+                
+                % check for empty cells (no events of that type)
+                check_event_type = cellfun(@(x) ~isempty(x), handles.events);
+                
+                valid_events = 1 : length(handles.events);
+                valid_events(~check_event_type) = [];
+                
+                % change the ydata for each event type
+                for n = valid_events
+                    set(handles.events{n}(:, 1), 'yData', y_limits(1));
+                end
             end
             
         case 'downarrow'
@@ -1110,9 +1118,17 @@ if isempty(event.Modifier)
             if isfield(handles, 'events')
                 % update the event lower triangles
                 y_limits = get(handles.main_ax, 'ylim');
-                relevant_handles = cell2mat(handles.events);
-                relevant_handles = relevant_handles(:,1); 
-                set(relevant_handles, 'ydata', y_limits(1))
+                
+                % check for empty cells (no events of that type)
+                check_event_type = cellfun(@(x) ~isempty(x), handles.events);
+                
+                valid_events = 1 : length(handles.events);
+                valid_events(~check_event_type) = [];
+                
+                % change the ydata for each event type
+                for n = valid_events
+                    set(handles.events{n}(:, 1), 'yData', y_limits(1));
+                end
             end
 
         case 'pageup'
