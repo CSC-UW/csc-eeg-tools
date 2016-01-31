@@ -298,9 +298,6 @@ EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
 % set the name
 set(handles.fig, 'name', ['csc: ', dataFile]);
 
-% update the handles structure
-guidata(handles.fig, handles)
-
 % use setappdata for data storage to avoid passing it around in handles when not necessary
 setappdata(handles.fig, 'EEG', EEG);
 
@@ -310,11 +307,16 @@ if ndims(EEG.data) == 3
     eegData = reshape(EEG.data, size(EEG.data, 1), []);
     setappdata(handles.fig, 'eegData', eegData);
 else
-    setappdata(handles.fig, 'eegData', EEG.data);
+    setappdata(handles.fig, 'eegData', eegData);
 end
     
 % plot the initial data
 update_main_plot(handles.fig);
+
+% redraw event triangles if present
+if isfield(EEG, 'csc_event_data')
+    fcn_redraw_events(handles.fig, []);
+end
 
 function fcn_save_eeg(object, ~)
 % get the handles from the figure
@@ -350,7 +352,7 @@ range = current_point : ...
 if handles.plotICA == 1
   title(handles.main_ax, 'Component Activations', 'Color', 'w');
   icaData = getappdata(handles.fig, 'icaData');
-  data = icaData(EEG.csc_montage.channels(handles.disp_chans, 1),range);
+  data = icaData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
   
 else
   title(handles.main_ax, 'Channel Activations', 'Color', 'w');
@@ -423,10 +425,10 @@ set(handles.plot_eeg(hidden_idx), 'visible', 'off');
 
 % plot the labels in their own boxes
 handles.labels = zeros(handles.n_disp_chans, 1);
-for i = 1:handles.n_disp_chans
-  chn = handles.disp_chans(i);
-  handles.labels(i) = ...
-        text(0.5, toAdd(i,1)+scale/5, EEG.csc_montage.label_channels{chn},...
+for n = 1 : handles.n_disp_chans
+  chn = handles.disp_chans(n);
+  handles.labels(n) = ...
+        text(0.5, toAdd(n, 1) + scale / 5, EEG.csc_montage.label_channels{chn},...
         'parent', handles.name_ax,...
         'fontsize',   12,...
         'fontweight', 'bold',...
@@ -547,8 +549,12 @@ if isempty(eegMeta.chanlocs)
     end
 end
 
-if isfield(eegMeta, 'csc_montage')
-    if length(eegMeta.csc_montage.label_channels) ~= eegMeta.nbchan
+% check for obvious change in the data
+if isfield(eegMeta, 'csc_event_data') || isfield(eegMeta, 'csc_montage')
+    if max(eegMeta.csc_montage.channels(:)) > eegMeta.nbchan ...
+            || max([eegMeta.csc_event_data{:, 2}]) > eegMeta.xmax ...
+            || (strcmp(eegMeta.csc_montage.name, 'original')...
+            && size(eegMeta.csc_montage.channels, 1) ~= eegMeta.nbchan)
         fprintf(1, 'Warning: Montage does not match data; resetting \n');
         eegMeta = rmfield(eegMeta, 'csc_montage');
         eegMeta = rmfield(eegMeta, 'csc_event_data');
@@ -565,6 +571,13 @@ if ~isfield(eegMeta, 'csc_montage')
     end
     eegMeta.csc_montage.channels(:, 1) = 1:eegMeta.nbchan;
     eegMeta.csc_montage.channels(:, 2) = eegMeta.nbchan;
+else
+    % check that the montage has enough channels to display
+    if length(eegMeta.csc_montage.label_channels) < handles.n_disp_chans
+        handles.n_disp_chans = length(eegMeta.csc_montage.label_channels);
+        handles.disp_chans = [1 : handles.n_disp_chans];
+        fprintf(1, 'Warning: reduced number of display channels to match montage\n');
+    end
 end
 
 % load ICA time courses if the information need to construct them is available.
@@ -598,6 +611,9 @@ end
 
 % turn on the montage option
 set(handles.menu.montage, 'enable', 'on');
+
+% update the handles
+guidata(object, handles);
 
 % reset the scrollbar values
 handles.vertical_scroll.Max = -1;
@@ -654,6 +670,17 @@ handles.table = uitable(...
     'foregroundcolor', [0.9, 0.9, 0.9]      ,...
     'columnName',   {'label','time', 'type'});
 
+% export to workspace
+handles.export_button = uicontrol(...
+    'Parent',   handles.fig,...
+    'Style',    'pushbutton',...
+    'String',   'export to workspace',...
+    'Units',    'normalized',...
+    'Position', [0.05 0.05 0.9 0.04],...
+    'FontName', 'Century Gothic',...
+    'FontSize', 11,...
+    'tooltipString', 'export to workspace');
+
 % get the underlying java properties
 jscroll = findjobj(handles.table);
 jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
@@ -669,6 +696,7 @@ jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
 
 % set the callback for table cell selection
 set(handles.table, 'cellSelectionCallback', {@cb_select_table});
+set(handles.export_button, 'callback', {@pb_event_export});
 
 % calculate the event_data from the handles
 event_data = fcn_compute_events(handles.csc_plotter);
@@ -737,7 +765,7 @@ table_data = get(object, 'data');
 
 % retrieve the time from the table
 selected_time = table_data{event_data.Indices(1), 2};
-go_to_time = selected_time - handles.epoch_length/2;
+go_to_time = selected_time - handles.csc_plotter.epoch_length / 2;
 selected_sample = floor(go_to_time * EEG.srate);
 
 % change the hidden time keeper
@@ -897,6 +925,14 @@ end
 % update the GUI handles
 guidata(handles.fig, handles)
 
+function pb_event_export(object, ~)
+% get the handles
+handles = guidata(object);
+
+% assign events to base workspace
+event_data = fcn_compute_events(handles.csc_plotter);
+assignin('base', 'event_data', event_data);
+
 
 % Options Menu and their Keyboard Shortcuts
 % ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -981,6 +1017,11 @@ switch type
             '', 1, {num2str( handles.filter_options(1)),...
                     num2str( handles.filter_options(2))});
         
+        % check for cancelled window        
+        if isempty(answer)
+            return;
+        end
+                
         % get and set the new values
         new_values = str2double(answer);
         if ~isequal(new_values, handles.filter_options')
@@ -1364,10 +1405,11 @@ for n = 1:length(EEG.chanlocs)
         'color',  [0.9, 0.9, 0.9],...
         'horizontalAlignment', 'center',...
         'selectionHighlight', 'off',...
-        'hitTest', 'off');
+        'userData', n);
 end
 
 set(handles.plt_markers, 'ButtonDownFcn', {@bdf_select_channel});
+set(handles.txt_labels, 'ButtonDownFcn', {@bdf_select_channel});
 
 guidata(handles.fig, handles);
 setappdata(handles.csc_plotter.fig, 'EEG', EEG);
@@ -1422,8 +1464,13 @@ switch event
         
     case 'alt'
         data = get(handles.table, 'data');
-        ind  = cellfun(@(x) isempty(x), data(:,3));
-        data(ind,3) = deal({ch});
+        ind  = cellfun(@(x) isempty(x), data(:, 3));
+        % if same channel is selected than apply no reference
+        if ch == data{end, 2}
+            data(ind, 3) = deal({0});
+        else
+            data(ind, 3) = deal({ch});
+        end
         set(handles.table, 'data', data);
         
         % replot the arrows
@@ -1545,7 +1592,7 @@ else
 end
 
 % check to make sure it ends with '.emo' extension
-if ~strcmp(fileName(end-3: end), '.emo')
+if ~strcmp(fileName(end-3 : end), '.emo')
     fileName = [fileName, '.emo'];
 end
 
