@@ -556,8 +556,13 @@ if isfield(eegMeta, 'csc_event_data') || isfield(eegMeta, 'csc_montage')
             || (strcmp(eegMeta.csc_montage.name, 'original')...
             && size(eegMeta.csc_montage.channels, 1) ~= eegMeta.nbchan)
         fprintf(1, 'Warning: Montage does not match data; resetting \n');
-        eegMeta = rmfield(eegMeta, 'csc_montage');
-        eegMeta = rmfield(eegMeta, 'csc_event_data');
+        % delete the fields (if they exist in the first place
+        if isfield(eegMeta, 'csc_montage')
+            eegMeta = rmfield(eegMeta, 'csc_montage');
+        end
+        if isfield(eegMeta, 'csc_event_data')
+            eegMeta = rmfield(eegMeta, 'csc_event_data');
+        end
     end
 end
 
