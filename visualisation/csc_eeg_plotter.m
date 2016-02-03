@@ -557,6 +557,9 @@ if isfield(eegMeta, 'csc_montage')
         fprintf(1, 'Warning: Montage does not match data; resetting \n');
         % delete the fields
         eegMeta = rmfield(eegMeta, 'csc_montage');
+        if isfield(eegMeta, 'csc_event_data')
+            eegMeta = rmfield(eegMeta, 'csc_event_data');
+        end
     end
 end
 
