@@ -550,19 +550,22 @@ if isempty(eegMeta.chanlocs)
 end
 
 % check for obvious change in the data
-if isfield(eegMeta, 'csc_event_data') || isfield(eegMeta, 'csc_montage')
+if isfield(eegMeta, 'csc_montage')
     if max(eegMeta.csc_montage.channels(:)) > eegMeta.nbchan ...
-            || max([eegMeta.csc_event_data{:, 2}]) > eegMeta.xmax ...
             || (strcmp(eegMeta.csc_montage.name, 'original')...
             && size(eegMeta.csc_montage.channels, 1) ~= eegMeta.nbchan)
         fprintf(1, 'Warning: Montage does not match data; resetting \n');
-        % delete the fields (if they exist in the first place
-        if isfield(eegMeta, 'csc_montage')
-            eegMeta = rmfield(eegMeta, 'csc_montage');
-        end
-        if isfield(eegMeta, 'csc_event_data')
-            eegMeta = rmfield(eegMeta, 'csc_event_data');
-        end
+        % delete the fields
+        eegMeta = rmfield(eegMeta, 'csc_montage');
+    end
+end
+
+if isfield(eegMeta, 'csc_event_data') && ~isempty(eegMeta.csc_event_data)
+    % check for later event than the length of the data
+    if max([eegMeta.csc_event_data{:, 2}]) > eegMeta.xmax
+        % delete the field
+        eegMeta = rmfield(eegMeta, 'csc_event_data');
+        fprintf(1, 'Warning: Events not in range, resetting events \n'); 
     end
 end
 
@@ -1384,7 +1387,7 @@ handles  = guidata(montage_handle);
 EEG = getappdata(handles.csc_plotter.fig, 'EEG');
 
 if ~isfield(EEG.chanlocs(1), 'x')
-   EEG.chanlocs = swa_add2dlocations(EEG.chanlocs); 
+   EEG.chanlocs = csc_add2dlocations(EEG.chanlocs); 
 end
 
 x = [EEG.chanlocs.x];
