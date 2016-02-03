@@ -746,6 +746,10 @@ for type = 1:length(no_events)
     
 end
 
+% sort the events by latency
+[~, sort_ind] = sort([event_data{:, 2}]);
+event_data = event_data(sort_ind, :);
+
 function cb_select_table(object, event_data)
 % when a cell in the table is selected, jump to that time point
 
