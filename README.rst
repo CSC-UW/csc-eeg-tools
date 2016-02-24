@@ -49,14 +49,33 @@ remove/add dotted 1 sec segments		- G
 export hidden channels					- Ctrl+X
 export marked trials					- Ctrl+T
 
+| Usage                            | Key Shortcut   | 
+| -------------------------------- |:--------------:| 
+| load eeg                         | Ctrl+L         | 
+| save eeg                         | Ctrl+S         | 
+|                                  |                | 
+| change nbr of displayed channels | Ctrl+D         | 
+| change epoch length              | Ctrl+E         | 
+| toggle components/channels       | Ctrl+T         | 
+| set high/low cutoff              | Ctrl+F         | 
+| enlarge channels                 | centered       | 
+| decrease channels                | are neat       | 
+| move right to next epoch         | right-aligned  | 
+| move left to previous epoch      | centered       | 
+| move right (not a full epoch)    | are neat       | 
+
 How to use the Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^
 in this example we assume `EEG` is you loaded dataset:
 
    to open the plotter and check e.g. for artifacts and hide bad channels use the code 
-   `EEG = csc_eeg_plotter(EEG);`
+   ```
+   EEG = csc_eeg_plotter(EEG);
+   ```
    to change the hidden channels to bad channels use
-   `EEG.bad_channels{1} = EEG.hidden_channels;```
+   ```
+   EEG.bad_channels{1} = EEG.hidden_channels;
+   ```
    to reject/delete channels with artifacts
    ```
    EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});
@@ -65,15 +84,15 @@ in this example we assume `EEG` is you loaded dataset:
 if you have run e.g. ICA on your dataset and want to look/remove components
 
    open the plotter and also the component plot for each channel
-    `csc_eeg_plotter(EEG);`
-    `EEG.good_components = csc_component_plot(EEG);`
+    ```
+    csc_eeg_plotter(EEG);
+    EEG.good_components = csc_component_plot(EEG);
+    ```
    now to remove the marked bad components and automaticaly change the local eeg variable use
-    `EEG = pop_subcomp( EEG , find(~EEG.good_components));`
-    `EEG = eeg_checkset(EEG);`
-
-
-
-
+    ```
+    EEG = pop_subcomp( EEG , find(~EEG.good_components));
+    EEG = eeg_checkset(EEG);
+    ```
 
 
 Troubleshooting
