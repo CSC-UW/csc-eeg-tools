@@ -18,65 +18,66 @@ Installation
 
 Key-Shortcuts for Plotter
 ^^^^^^^^^^^^^^^^^^^^^^^^^
-load eeg                                - Ctrl+L
-save eeg                                - Ctrl+S
 
-change nbr of displayed channels		- Ctrl+D
-change epoch length 					- Ctrl+E
++-------------------------------------+----------------------------------------------------------------+
+| Usage                               | Shortcut                                                       |
++=====================================+================================================================+
+| load eeg                            | Ctrl+L                                                         |
++-------------------------------------+----------------------------------------------------------------+
+| save eeg                            | Ctrl+S                                                         |    
++-------------------------------------+----------------------------------------------------------------+
+| change nbr of displayed channels    | Ctrl+D                                                         |
++-------------------------------------+----------------------------------------------------------------+
+| change epoch length                 | Ctrl+E                                                         |
++-------------------------------------+----------------------------------------------------------------+
+| toggle components/channels          | Ctrl+T                                                         |
++-------------------------------------+----------------------------------------------------------------+
+| set high/low cutoff                 | Ctrl+F                                                         |
++-------------------------------------+----------------------------------------------------------------+
+| enlarge channels                    | Arrow up                                                       |
++-------------------------------------+----------------------------------------------------------------+
+| decrease channels                   | Arrow down                                                     |
++-------------------------------------+----------------------------------------------------------------+
+| move to next epoch                  | Arrow right                                                    |
++-------------------------------------+----------------------------------------------------------------+
+| move to previous epoch              | Arrow left                                                     |
++-------------------------------------+----------------------------------------------------------------+
+| move right (not a full epoch)       | Ctrl+Arrow right                                               |
++-------------------------------------+----------------------------------------------------------------+
+| move left (not a full epoch)        | Ctrl+Arrow left                                                |
++-------------------------------------+----------------------------------------------------------------+
+| move down to next channel section   | Page up                                                        |
++-------------------------------------+----------------------------------------------------------------+
+| move up to previous channel section | Page down                                                      | 
++-------------------------------------+----------------------------------------------------------------+
+| hide channels                       | click on channel nbr                                           |
++-------------------------------------+----------------------------------------------------------------+
+| set event marker                    | right mouse click on the spot where you want to set the event  |
++-------------------------------------+----------------------------------------------------------------+
+| delete event marker                 | right mouse click on the event marker                          |
++-------------------------------------+----------------------------------------------------------------+
+| hide/show dotted 1 sec segment line | G                                                              |
++-------------------------------------+----------------------------------------------------------------+
+| export hidden channels              | Ctrl+X                                                         |
++-------------------------------------+----------------------------------------------------------------+
+| export marked trails                | Ctrl+T                                                         |
++-------------------------------------+----------------------------------------------------------------+
 
-toggle components/channels				- Ctrl+T
 
-set high/low cutoff 					- Ctrl+F
-
-enlarge channels						- Arrow up
-decrease channels						- Arrow down
-
-move right to next epoch				- Arrow right
-move left to previous epoch				- Arrow left
-move right (not a full epoch)			- Ctrl+Arrow right
-move left (not a full epoch)			- Ctrl+Arrow left
-
-move down to next section of channels	- Page down
-move up to previous section of channels	- Page up
-
-hide channels							- click on the channels nbr
-
-set event 								- right mouse click on the spot where you want to set the event
-delete event							- right click on the event marker
-
-remove/add dotted 1 sec segments		- G
-
-export hidden channels					- Ctrl+X
-export marked trials					- Ctrl+T
-
- Usage | Key Shortcut  
- --- | --- 
-| load eeg                         | Ctrl+L         | 
-| save eeg                         | Ctrl+S         | 
-|                                  |                | 
-| change nbr of displayed channels | Ctrl+D         | 
-| change epoch length              | Ctrl+E         | 
-| toggle components/channels       | Ctrl+T         | 
-| set high/low cutoff              | Ctrl+F         | 
-| enlarge channels                 | centered       | 
-| decrease channels                | are neat       | 
-| move right to next epoch         | right-aligned  | 
-| move left to previous epoch      | centered       | 
-| move right (not a full epoch)    | are neat       | 
 
 How to use the Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^
 in this example we assume `EEG` is you loaded dataset:
 
-   to open the plotter and check e.g. for artifacts and hide bad channels use the code 
+  to open the plotter and check e.g. for artifacts and hide bad channels use the code 
    ```
    EEG = csc_eeg_plotter(EEG);
    ```
-   to change the hidden channels to bad channels use
+  to change the hidden channels to bad channels use
    ```
    EEG.bad_channels{1} = EEG.hidden_channels;
    ```
-   to reject/delete channels with artifacts
+  to reject/delete channels with artifacts
    ```
    EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});
    ```
