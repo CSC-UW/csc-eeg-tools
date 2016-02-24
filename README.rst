@@ -18,8 +18,8 @@ Installation
 
 Key-Shortcuts for Plotter
 ^^^^^^^^^^^^^^^^^^^^^^^^^
-load eeg 								- Ctrl+L
-save eeg 								- Ctrl+S
+load eeg                                - Ctrl+L
+save eeg                                - Ctrl+S
 
 change nbr of displayed channels		- Ctrl+D
 change epoch length 					- Ctrl+E
@@ -58,7 +58,9 @@ How to use the Functions
 ...to change the hidden channels to bad channels use
 ...```EEG.bad_channels{1} = EEG.hidden_channels;```
 ...to reject/delete channels with artifacts
-...```EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});```
+...```
+EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});
+```
 
 2. if you have run e.g. ICA on your dataset and want to look/remove components
 
