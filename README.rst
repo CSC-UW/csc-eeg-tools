@@ -53,12 +53,14 @@ How to use the Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^
 in this example we assume `EEG` is you loaded dataset:
 
-  1. to open the plotter and check e.g. for artifacts and hide bad channels use the code 
-  2. `EEG = csc_eeg_plotter(EEG);`
-  3. to change the hidden channels to bad channels use
-  4. `EEG.bad_channels{1} = EEG.hidden_channels;```
-  5. to reject/delete channels with artifacts
-  6. `EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});`
+   to open the plotter and check e.g. for artifacts and hide bad channels use the code 
+   `EEG = csc_eeg_plotter(EEG);`
+   to change the hidden channels to bad channels use
+   `EEG.bad_channels{1} = EEG.hidden_channels;```
+   to reject/delete channels with artifacts
+   ```
+   EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});
+   ```
 
 if you have run e.g. ICA on your dataset and want to look/remove components
 
