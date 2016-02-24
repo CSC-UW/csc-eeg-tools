@@ -51,23 +51,23 @@ export marked trials					- Ctrl+T
 
 How to use the Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^
-1. in this example we assume `EEG` is you loaded dataset:
+in this example we assume `EEG` is you loaded dataset:
 
    to open the plotter and check e.g. for artifacts and hide bad channels use the code 
-   `EEG = csc_eeg_plotter(EEG);`
+    `EEG = csc_eeg_plotter(EEG);`
    to change the hidden channels to bad channels use
-   `EEG.bad_channels{1} = EEG.hidden_channels;```
+    `EEG.bad_channels{1} = EEG.hidden_channels;```
    to reject/delete channels with artifacts
-   `EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});`
+    `EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});`
 
-2. if you have run e.g. ICA on your dataset and want to look/remove components
+if you have run e.g. ICA on your dataset and want to look/remove components
 
    open the plotter and also the component plot for each channel
-   `csc_eeg_plotter(EEG);`
-   `EEG.good_components = csc_component_plot(EEG);`
+    `csc_eeg_plotter(EEG);`
+    `EEG.good_components = csc_component_plot(EEG);`
    now to remove the marked bad components and automaticaly change the local eeg variable use
-   `EEG = pop_subcomp( EEG , find(~EEG.good_components));`
-   `EEG = eeg_checkset(EEG);`
+    `EEG = pop_subcomp( EEG , find(~EEG.good_components));`
+    `EEG = eeg_checkset(EEG);`
 
 
 
