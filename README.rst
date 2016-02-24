@@ -49,8 +49,8 @@ remove/add dotted 1 sec segments		- G
 export hidden channels					- Ctrl+X
 export marked trials					- Ctrl+T
 
-| Usage                            | Key Shortcut   | 
-| -------------------------------- |:--------------:| 
+ Usage | Key Shortcut  
+ --- | --- 
 | load eeg                         | Ctrl+L         | 
 | save eeg                         | Ctrl+S         | 
 |                                  |                | 
