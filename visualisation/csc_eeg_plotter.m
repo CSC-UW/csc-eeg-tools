@@ -215,11 +215,7 @@ switch nargin
         
         EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
         setappdata(handles.fig, 'EEG', EEG);
-        
-        % allocate marked trials
-        handles.trials = false(EEG.trials, 1);
-        guidata(handles.fig, handles)
-        
+               
         % update the plot to draw current EEG
         update_main_plot(handles.fig);
         
@@ -535,85 +531,92 @@ clicked_position = get(handles.spike_ax, 'currentPoint');
 set(handles.cPoint, 'Value', floor(clicked_position(1,1)));
 fcn_change_time(object, []);
 
-function eegMeta = initialize_loaded_eeg(object, eegMeta, eegData)
+function EEG = initialize_loaded_eeg(object, EEG, eegData)
 
 handles = guidata(object);
 
 % check for the channel locations
-if isempty(eegMeta.chanlocs)
-    if isempty(eegMeta.urchanlocs)
+if isempty(EEG.chanlocs)
+    if isempty(EEG.urchanlocs)
         fprintf(1, 'Warning: No channel locations found in the eegMeta structure \n');
     else
         fprintf(1, 'Information: Taking the EEG.urchanlocs as the channel locations \n');
-        eegMeta.chanlocs = eegMeta.urchanlocs;
+        EEG.chanlocs = EEG.urchanlocs;
     end
 end
 
 % check for obvious change in the data
-if isfield(eegMeta, 'csc_montage')
-    if max(eegMeta.csc_montage.channels(:)) > eegMeta.nbchan ...
-            || (strcmp(eegMeta.csc_montage.name, 'original')...
-            && size(eegMeta.csc_montage.channels, 1) ~= eegMeta.nbchan)
+if isfield(EEG, 'csc_montage')
+    if max(EEG.csc_montage.channels(:)) > EEG.nbchan ...
+            || (strcmp(EEG.csc_montage.name, 'original')...
+            && size(EEG.csc_montage.channels, 1) ~= EEG.nbchan)
         fprintf(1, 'Warning: Montage does not match data; resetting \n');
         % delete the fields
-        eegMeta = rmfield(eegMeta, 'csc_montage');
-        if isfield(eegMeta, 'csc_event_data')
-            eegMeta = rmfield(eegMeta, 'csc_event_data');
+        EEG = rmfield(EEG, 'csc_montage');
+        if isfield(EEG, 'csc_event_data')
+            EEG = rmfield(EEG, 'csc_event_data');
         end
     end
 end
 
-if isfield(eegMeta, 'csc_event_data') && ~isempty(eegMeta.csc_event_data)
+if isfield(EEG, 'csc_event_data') && ~isempty(EEG.csc_event_data)
     % check for later event than the length of the data
-    if max([eegMeta.csc_event_data{:, 2}]) > eegMeta.xmax
+    if max([EEG.csc_event_data{:, 2}]) > EEG.xmax
         % delete the field
-        eegMeta = rmfield(eegMeta, 'csc_event_data');
+        EEG = rmfield(EEG, 'csc_event_data');
         fprintf(1, 'Warning: Events not in range, resetting events \n'); 
     end
 end
 
 % check for previous
-if ~isfield(eegMeta, 'csc_montage')
+if ~isfield(EEG, 'csc_montage')
     % assign defaults
-    eegMeta.csc_montage.name = 'original';
-    eegMeta.csc_montage.label_channels = cell(eegMeta.nbchan, 1);
-    for n = 1 : eegMeta.nbchan
-        eegMeta.csc_montage.label_channels(n) = {num2str(n)};
+    EEG.csc_montage.name = 'original';
+    EEG.csc_montage.label_channels = cell(EEG.nbchan, 1);
+    for n = 1 : EEG.nbchan
+        EEG.csc_montage.label_channels(n) = {num2str(n)};
     end
-    eegMeta.csc_montage.channels(:, 1) = 1:eegMeta.nbchan;
-    eegMeta.csc_montage.channels(:, 2) = eegMeta.nbchan;
+    EEG.csc_montage.channels(:, 1) = 1:EEG.nbchan;
+    EEG.csc_montage.channels(:, 2) = EEG.nbchan;
 else
+    % restore hidden channels
+    handles.hidden_chans = EEG.hidden_channels;
+    
     % check that the montage has enough channels to display
-    if length(eegMeta.csc_montage.label_channels) < handles.n_disp_chans
-        handles.n_disp_chans = length(eegMeta.csc_montage.label_channels);
+    if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
+        handles.n_disp_chans = length(EEG.csc_montage.label_channels);
         handles.disp_chans = [1 : handles.n_disp_chans];
         fprintf(1, 'Warning: reduced number of display channels to match montage\n');
     end
 end
 
 % load ICA time courses if the information need to construct them is available.
-if isfield(eegMeta, 'icaweights') && isfield(eegMeta, 'icasphere')
-    if ~isempty(eegMeta.icaweights) && ~isempty(eegMeta.icasphere)
+if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
+    if ~isempty(EEG.icaweights) && ~isempty(EEG.icasphere)
         % If we have the same number of components as channels...
-        if size(eegMeta.icaweights, 1) == size(eegData, 1)
-            icaData = eegMeta.icaweights*eegMeta.icasphere*eegData;
-            setappdata(handles.fig, 'icaData', icaData);
+        if size(EEG.icaweights, 1) == size(eegData, 1)
+            % check for epoched data
+            ica_data = (EEG.icaweights * EEG.icasphere) ...
+                * EEG.data(EEG.icachansind, :);
+            
+            setappdata(handles.fig, 'icaData', ica_data);
             % If we have fewer components than channels (maybe you've already removed
             % some of them), then pad the ICA weights with zeros and produce component
             % activations as if you had the same number of components as channels.
-        elseif size(eegMeta.icaweights, 1) < size(eegData,1)
-            dimdiff = size(eegData, 1) - size(eegMeta.icaweights, 1);
-            pad = zeros(dimdiff, size(eegMeta.icaweights, 2));
-            paddedweights = [eegMeta.icaweights ; pad];
+            
+        elseif size(EEG.icaweights, 1) < size(eegData,1)
+            dimdiff = size(eegData, 1) - size(EEG.icaweights, 1);
+            pad = zeros(dimdiff, size(EEG.icaweights, 2));
+            paddedweights = [EEG.icaweights ; pad];
             try
-                icaData = paddedweights*eegMeta.icasphere*eegData;
+                ica_data = paddedweights * EEG.icasphere * eegData;
             catch
-                fprintf('%s. %s.',...
-                        'Data were reinterpolated after IC removal',...
-                        'Can no longer display IC activations');
-                icaData = zeros(size(eegData));
+                fprintf('%s. %s.\n',...
+                    'Data were reinterpolated after IC removal',...
+                    'Can no longer display IC activations');
+                ica_data = zeros(size(eegData));
             end
-            setappdata(handles.fig, 'icaData', icaData);
+            setappdata(handles.fig, 'icaData', ica_data);
         else
             error('ICA unmixing matrix is too large for data');
         end
@@ -623,12 +626,16 @@ end
 % turn on the montage option
 set(handles.menu.montage, 'enable', 'on');
 
+% allocate marked trials
+handles.trials = false(EEG.trials, 1);
+guidata(handles.fig, handles)
+
 % update the handles
 guidata(object, handles);
 
 % reset the scrollbar values
 handles.vertical_scroll.Max = -1;
-handles.vertical_scroll.Min = -(eegMeta.nbchan - length(handles.disp_chans) + 1);
+handles.vertical_scroll.Min = -(EEG.nbchan - length(handles.disp_chans) + 1);
 
 function fcn_close_window(object, ~)
 % just resume the ui if the figure is closed
@@ -1141,9 +1148,11 @@ if isempty(event.Modifier)
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
             
+            % get the new limits of the axes
+            y_limits = get(handles.main_ax, 'ylim');
+            
+            % update the event lower triangles
             if isfield(handles, 'events')
-                % update the event lower triangles
-                y_limits = get(handles.main_ax, 'ylim');
                 
                 % check for empty cells (no events of that type)
                 check_event_type = cellfun(@(x) ~isempty(x), handles.events);
@@ -1155,6 +1164,12 @@ if isempty(event.Modifier)
                 for n = valid_events
                     set(handles.events{n}(:, 1), 'yData', y_limits(1));
                 end
+                                
+            end
+            
+            % reset the trial border markers
+            if isfield(handles, 'trial_borders')
+               set(handles.trial_borders, 'yData', y_limits(1));
             end
             
         case 'downarrow'
@@ -1173,7 +1188,6 @@ if isempty(event.Modifier)
             
             if isfield(handles, 'events')
                 % update the event lower triangles
-                y_limits = get(handles.main_ax, 'ylim');
                 
                 % check for empty cells (no events of that type)
                 check_event_type = cellfun(@(x) ~isempty(x), handles.events);
@@ -1185,6 +1199,14 @@ if isempty(event.Modifier)
                 for n = valid_events
                     set(handles.events{n}(:, 1), 'yData', y_limits(1));
                 end
+            end
+            
+            % get the new limits of the axes
+            y_limits = get(handles.main_ax, 'ylim');
+            
+            % reset the trial border markers
+            if isfield(handles, 'trial_borders')
+               set(handles.trial_borders, 'yData', y_limits(1));
             end
 
         case 'pageup'
