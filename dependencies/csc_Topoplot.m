@@ -38,12 +38,11 @@ PlotContour         = 1;            % Determines whether the contour lines are d
 PlotSurface         = 0;            % Determines whether the surface is drawn
 PlotHead            = 1;            % Determines whether the head is drawn 
 PlotChannels        = 1;            % Determines whether the channels are drawn
-PlotSigChannels     = 0;            % Determines whether significant channels are plotted separately
+MarkedChannels      = [];           % Determines whether significant channels are plotted separately
+MarkedString        = '!';
+MarkedColor         = [0, 0, 0];
 
-SigThreshold        = 0.05;
-PValues             = [];
-
-NewFigure           = 0;            % 0/1 - Whether to explicitly draw a new figure for the topoplot
+NewFigure           = 1;            % 0/1 - Whether to explicitly draw a new figure for the topoplot
 Axes                = 0;
 
 if isempty(V)
@@ -66,25 +65,27 @@ if nargin > 2
     
     switch Param
         case 'headwidth'
-            HeadWidth           = Value;
+            HeadWidth = Value;
         case 'numcontours'
-            NumContours         = Value;    
+            NumContours = Value;    
         case 'newfigure'
-            NewFigure           = Value;
+            NewFigure = Value;
         case 'axes'
-            Axes                = Value;
+            Axes = Value;
         case 'plotcontour'
-            PlotContour         = Value;
+            PlotContour = Value;
         case 'plotsurface'
-            PlotSurface         = Value;
+            PlotSurface = Value;
         case 'plotchannels'
-            PlotChannels        = Value;
-        case 'plotsigchannels'
-            PlotChannels        = Value;
+            PlotChannels = Value;
+        case 'markedchannels'
+            MarkedChannels = Value;
+        case 'markedcolor'
+            MarkedColor = Value;
+        case 'markedstring'
+            MarkedString = Value;
         case 'plothead'
-            PlotHead            = Value;
-        case 'pvalues'
-            PValues             = Value;         
+            PlotHead = Value;     
         otherwise
             display (['Unknown parameter setting: ' Param])
     end
@@ -103,9 +104,12 @@ if PlotSurface == 1
     NumContours = 5;
 end
 
-if PlotSigChannels == 1 && ~isempty(PValues)
-    display('Asked to plot significant channels without the addition of the p-values.');
-    PlotSigChannels = 0;
+% check that marked channels size is same as electrodes
+if ~isempty(MarkedChannels)
+   if length(MarkedChannels) ~= length(e_loc)
+       fprintf(1, 'Warning: Marked Channels different size than number of electrodes.\n');
+       MarkedChannels = [];
+   end
 end
 
 % Adjust the contour lines to account for the minimum and maximum difference in values
@@ -240,16 +244,18 @@ if PlotChannels == 1;
 	     'set(gco, ''string'', tmpstr); clear tmpstr;'] );
 end
 
-% Plot the significant channels separately
-% if PlotSigChannels == 1;
-%     
-%     SigId    = find(PValues(:,Sample)<SigThreshold); % Significant Channels
-%     set(hChannels(SigId{1})                     ,...
-%         'String',               '+'             ); 
-%     
-% end
+% plot the marked channels
+% ^^^^^^^^^^^^^^^^^^^^^^^^
+if ~isempty(MarkedChannels)
+    set(H.Channels(MarkedChannels), ...
+        'fontSize', 15, ...
+        'color', MarkedColor, ...
+        'string', MarkedString);
+end
+
 
 % Adjustments
+% ^^^^^^^^^^^
 % square axes
 set(H.CurrentAxes, 'PlotBoxAspectRatio', [1, 1, 1]);
 % hide the axes
