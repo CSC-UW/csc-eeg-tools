@@ -75,6 +75,9 @@ for epoch_num = 1 : no_epochs
     
 end
 
+% edit freq_range to final output
+freq_range = freq_range(selected_range);
+
 % save to external file
 if options.save_file
     
