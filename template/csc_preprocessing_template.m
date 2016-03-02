@@ -1,10 +1,5 @@
 % Preprocess the Data
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-% * steps can be done within EEGLAB GUI
-
-% clear the memory
-clear all; clc;
-
 % load the specific dataset
 % [fileName, filePath] = uigetfile('*.set');
 EEG = pop_loadset();
@@ -14,35 +9,44 @@ low_cutoff  = 0.3;
 high_cutoff = 40;
 EEG = pop_eegfiltnew(EEG, low_cutoff, high_cutoff, [], 0, [], 0);
 
-% removing bad data
-% `````````````````
-% take a look at the data manually
-    eegplot( EEG.data               ,...
-        'srate',        EEG.srate   ,...
-        'winlength',    30          ,...
-        'dispchans',    15          );
 
-% bad channels
-    % find channels based on stds for spectral windows (better)
-    [~, EEG.bad_channels, EEG.specdata] = pop_rejchanspec(EEG,...
-        'freqlims', [20 40]     ,...
-        'stdthresh',[-3.5 3.5]  ,...
-        'plothist', 'off'       );
+% remove artefacts
+% ````````````````
+% use csc_eeg_plotter to visualise the time series
+% [click on channel label to hide channels]
+% [mark bad segments using event 1 and event 2 markers]
 
-    % manually remove channels
-    EEG.bad_channels = [EEG.bad_channels, ];
-    
-    % remove the bad channels found
-    EEG = pop_select(EEG, 'nochannel', EEG.bad_channels);
+% remove bad channels and trials
+EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});
 
-% bad segments
-    % use either eeglab or wispic options
+% remove epochs
+event_starts = cellfun(@(x) strcmp(x, 'event 1'), EEG.csc_event_data(:, 1));
+
+% sanity check for artifact event markers
+if sum(event_starts) ~= sum(~event_starts)
+   fprintf('\nWarning: uneven number of events, check event_data\n'); 
+end
+
+% use EEGLAB to remove the points
+EEG.bad_segments{1} = [cell2mat(EEG.csc_event_data(event_starts, 2)), ...
+    cell2mat(EEG.csc_event_data(~event_starts, 2))];
+
+% convert the timing from seconds to samples
+EEG.bad_segments{1} = floor(EEG.bad_segments{1} * EEG.srate);
+
+% use EEGLAB to remove the regions
+EEG = pop_select(EEG, 'nopoint', EEG.bad_segments{1});
+
+
+% semi-automatic bad segment detection
+% ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    % use either eeglab [pop_rejchan] or wispic options
 method = 'wispic';
 EEG = csc_artifact_rejection(EEG, method, 'epoch_length', 6);
 
 % plot the first bad region
     window = 2 * EEG.srate;
-    plot(EEG.data(:, EEG.bad_regions(1,1)-window : EEG.bad_regions(1,2)+window)',...
+    plot(EEG.data(:, EEG.bad_regions(1,1) - window : EEG.bad_regions(1,2) + window)',...
         'color', [0.8, 0.8, 0.8]);
     
 % remove the bad_regions
@@ -59,27 +63,21 @@ end
 % independent components analysis 
 % ```````````````````````````````
 % run ICA (optional)
-EEG = pop_runica(EEG, 'extended', 1, 'interupt', 'off');
+EEG = pop_runica(EEG,...
+    'icatype', 'binica', ...
+    'extended', 1,...
+    'interupt', 'off');
 
+% or use the csc_eeg_tools and use the ica option
 % remove the components (best to do using plot component properties in the GUI)
-% plot the ica components as time series
-eegplot( EEG.icaact             ,...
-    'srate',        EEG.srate   ,...
-    'winlength',    30          ,...
-    'dispchans',    15          );
+csc_eeg_plotter(EEG);
+EEG.good_components = csc_component_plot(EEG);
 
-% plot the properties of the components manually (second input = 0)
-pop_prop( EEG, 0, [1  : 16], NaN, {'freqrange' [2 40] });
-pop_prop( EEG, 0, [17 : 32], NaN, {'freqrange' [2 40] });
-pop_prop( EEG, 0, [33 : 48], NaN, {'freqrange' [2 40] });
-pop_prop( EEG, 0, [49 : 64], NaN, {'freqrange' [2 40] });
-pop_prop( EEG, 0, [65 : 80], NaN, {'freqrange' [2 40] });
+% save the data so componont removal can be quickly reproduced
+EEG = pop_saveset(EEG);
 
 % pop_prop changes the local EEG variable automatically when marked as reject
-EEG.bad_components = find(EEG.reject.gcompreject);
-    % include additional bad components manually
-EEG.bad_components = [EEG.bad_components,];
-EEG = pop_subcomp( EEG , EEG.bad_components);
+EEG = pop_subcomp( EEG , find(~EEG.good_components));
 EEG = eeg_checkset(EEG);
 
 
@@ -88,7 +86,6 @@ EEG = eeg_checkset(EEG);
 [previousFile, previousPath] = uigetfile('*.set');
 previousEEG = load(fullfile(previousPath, previousFile), '-mat');
 EEG = eeg_interp(EEG, previousEEG.EEG.chanlocs);
-
 
 % change reference
 % ````````````````
