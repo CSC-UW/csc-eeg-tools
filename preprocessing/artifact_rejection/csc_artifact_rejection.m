@@ -34,7 +34,7 @@ switch method
         % ~~~~~~~~~~~~~~~~~~~~~~~~~~
         % calculate the bad epochs using thresholding of the band of
         % interest (2nd parameters)
-        bad_epochs = csc_artifact_detection_fft(fft_bands, [1,5], 'semi_automatic');
+        bad_epochs = csc_artifact_detection_fft(fft_bands, [1, 5], 'semi_automatic');
         
         % calculate the bad epochs in time
         bad_epochs_time = (find(bad_epochs) * options.epoch_length) - options.epoch_length;
@@ -58,12 +58,12 @@ saveName = [EEG.filename(1:end-4), '_fftANok.mat'];
 varargin = varargin{1};
 
 options = struct(...
-    'ave_ref',          1       ,...
+    'ave_ref',          0       ,...
     'bad_channels',     []      ,...
     'save_file',        0       ,...
     'save_name',        saveName,...
     'epoch_length',     6       ,...
-    'freq_limit',       240     );
+    'freq_limit',       40     );
 
 % read the acceptable names
 optionNames = fieldnames(options);

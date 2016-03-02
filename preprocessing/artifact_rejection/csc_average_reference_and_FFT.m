@@ -1,7 +1,8 @@
-function [fft_all, freq_range] = csc_average_reference_and_FFT(EEG, options)
+function [spectral_data, freq_range] = csc_average_reference_and_FFT(EEG, options)
 
 % remove bad channels
 % ~~~~~~~~~~~~~~~~~~~
+% NOTE: at this point bad channels should have been removed anyways
 if ~isempty(options.bad_channels)
     
     % set the bad channel values to NaN
@@ -15,8 +16,7 @@ end
 if options.ave_ref == 1
     
     % use EEGLABs function
-    EEG = pop_reref( EEG, [],...
-        'refloc', EEG.chaninfo.nodatchans(:));
+    EEG = pop_reref( EEG, [] );
 
 elseif options.ave_ref == 185
     
@@ -40,56 +40,46 @@ end
 % calculate the fft on epoched data
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
 % calculate the number of samples in each epoch
-no_epoch_samples = EEG.srate * options.epoch_length;
-
-% calculate the number of channels
-no_channels = size(EEG.data, 1);
-
+window_size = floor(EEG.srate * options.epoch_length);
+% mod the window size to 2
+window_size = floor(window_size / 2) * 2;
 % calculate the number of epochs, rounded down
-no_epochs = floor(size(EEG.data, 2) / no_epoch_samples);
+no_epochs = floor(EEG.pnts/ window_size);
+% calculate the frequency range
+freq_range = EEG.srate * (0 : (window_size / 2)) / window_size;
+selected_range = freq_range >= 0 & freq_range < options.freq_limit;
+no_bins = sum(selected_range);
 
-% pre-allocate the size of the fft variable
-    %TODO: change arbitrary 240 frequency bins to something useful
-freq_limit = options.freq_limit;
-fft_all=NaN(no_channels, freq_limit, no_epochs + 1);
+% pre_allocate spectral_data
+spectral_data = nan(EEG.nbchan, no_bins, no_epochs);
 
-% TODO: Use appropriate inputs to pwelch function for epoch split
-% loop for each channel
-fprintf(1, '\nInformation: Calculating FFT: Channel ');
-for channel = 1:no_channels
-    fprintf(1, '%s, ', num2str(channel));
+% loop for each individual epoch
+csc_progress_indicator('initialise', 'epochs completed');
+for epoch_num = 1 : no_epochs
     
-    % start a count for the epochs
-    epoch_count = 1;
+    epoch_start = (epoch_num - 1) * window_size + 1;
+    epoch_end = epoch_num * window_size;
     
-    % loop for each epoch
-    for epochNum = 1:no_epochs
-        start   = ((epochNum - 1) * no_epoch_samples) + 1;
-        ending  = start + no_epoch_samples;
-        
-        % run the fft using the pwelch method of overlapping windows
-        [ffte, F] = pwelch(EEG.data(channel, start:ending) ,...
-            [], []              ,...
-            no_epoch_samples    ,...
-            EEG.srate           );
-        
-        % only save ffts up to a particular frequency
-        ffte = ffte(1:freq_limit);
-        fft_all(channel, :, epoch_count) = ffte;
-        
-        % increase the count
-        epoch_count = epoch_count+1;
-    end
+    % run the fft
+    fft_estimate = fft(EEG.data(:, epoch_start : epoch_end), [], 2);
+    
+    fft_estimate = abs(fft_estimate / window_size);
+    fft_estimate = fft_estimate(:, 1 : window_size / 2 + 1);
+    fft_estimate(:, 2 : end - 1) = 2. * fft_estimate(:, 2 : end - 1);
+    spectral_data(:, :, epoch_num) = fft_estimate(:, selected_range);
+    
+    % update progress
+    csc_progress_indicator('update', epoch_num, no_epochs);    
+    
 end
-
-freq_range = F(1 : freq_limit);
 
 % save to external file
 if options.save_file
     
     % save the file in the current directory
-    save(options.save_name, 'fft_all', 'freq_range', '-v7.3');
+    save(options.save_name, 'spectral_data', 'freq_range', '-v7.3');
     
 end
 

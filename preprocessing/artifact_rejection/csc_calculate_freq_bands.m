@@ -2,6 +2,7 @@ function fft_bands = csc_calculate_freq_bands(fft_all, freq_range, options)
 % concatenates all the ffts from the input into one large variable
 
 % define the frequency bands of interest
+% TODO: specify bands in the options input
 freq_bands =   [0.5, 4 ;
                 5,   8 ;
                 8,  12 ;
