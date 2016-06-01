@@ -4,19 +4,28 @@
 % [fileName, filePath] = uigetfile('*.set');
 EEG = pop_loadset();
 
+% clean line noise if necessary
+% consider high-pass filtering prior to this stage for optimal performance
+EEG = pop_cleanline(EEG);
+
 % filter the data
+% consider filtering on double precision data then back to single
 low_cutoff  = 0.3;
 high_cutoff = 40;
 EEG = pop_eegfiltnew(EEG, low_cutoff, high_cutoff, [], 0, [], 0);
 
+% down-sample if necessary
+EEG = pop_resample(EEG, 200);
 
 % remove artefacts
 % ````````````````
 % use csc_eeg_plotter to visualise the time series
 % [click on channel label to hide channels]
 % [mark bad segments using event 1 and event 2 markers]
+EEG = csc_eeg_plotter(EEG);
 
 % remove bad channels and trials
+EEG.bad_channels{1} = EEG.hidden_channels;
 EEG = pop_select(EEG, 'nochannel', EEG.bad_channels{1});
 
 % remove epochs
