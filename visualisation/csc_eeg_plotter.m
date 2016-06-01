@@ -623,6 +623,11 @@ if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
     end
 end
 
+% check the data length
+if EEG.pnts / EEG.srate < handles.epoch_length
+    handles.epoch_length = floor(EEG.pnts / EEG.srate);
+end
+
 % turn on the montage option
 set(handles.menu.montage, 'enable', 'on');
 
