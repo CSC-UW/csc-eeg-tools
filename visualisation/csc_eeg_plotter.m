@@ -1191,6 +1191,9 @@ if isempty(event.Modifier)
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
             
+            % get the new limits of the axes
+            y_limits = get(handles.main_ax, 'ylim');
+            
             if isfield(handles, 'events')
                 % update the event lower triangles
                 

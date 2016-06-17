@@ -98,6 +98,11 @@ if nansum(V(:)) == 0
     PlotContour = 0;
 end
 
+% if axes is specified no new figure
+if Axes ~= 0
+    NewFigure = 0;
+end
+
 % Overwrite number of contours if the interpolated surface is drawn
 if PlotSurface == 1
     PlotContour = 0; % Overwrite contours for surface
