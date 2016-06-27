@@ -2,15 +2,8 @@ function EEG = csc_eeg_plotter(varargin)
 
 %TODO: Main page 
         %Scale - green lines across one of the channels
-        %Video scroll with space bar - reasonable speed - pause/play?
-        %Auto adjust time scale on bottom for whole night
         %left side epoch length/scale boxes
         %top center box stating what is in the epoch (much like sleep scoring)
-        %highlight spikes, makes tick below
-        %Scoring axis
-            %ticks or mapping (like sleep scoring) only marked seizure, spike, artifact
-        %Display button? way to visualize event related EEG data while scoring?
-        %Options button? channel/window length and print button
 
 %TODO: Montage
         %Green line in front of headset
@@ -19,11 +12,13 @@ function EEG = csc_eeg_plotter(varargin)
 % TODO: Fix this ugly default setting style (e.g. handles.options...)    
 % declare defaults
 N_DISP_CHANS = 12;
-PLOT_ICA = 0;
 EPOCH_LENGTH = 30;
-PLOT_GRID = 1;
 FILTER_OPTIONS = [0.3 40];
-handles.grid_spacing = 1;
+handles.v_grid_spacing = 1;
+handles.h_grid_spacing = 75;
+handles.plot_hgrid = 1;
+handles.plot_vgrid = 1;
+handles.plotICA = false;
 
 % define the default colorscheme to use
 handles.colorscheme = struct(...
@@ -41,8 +36,6 @@ handles.disp_chans = [1 : handles.n_disp_chans];
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
 % on the plot, but are invisible. 
 handles.hidden_chans = [];
-% Plot normal time courses instead of component time courses by default
-handles.plotICA = PLOT_ICA;
 
 % make a window
 % ~~~~~~~~~~~~~
@@ -89,7 +82,6 @@ handles.name_ax = axes(...
 
 handles.filter_options = FILTER_OPTIONS;
 handles.epoch_length = EPOCH_LENGTH;
-handles.plot_grid = PLOT_GRID;
 
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -153,10 +145,14 @@ handles.menu.epoch_length = uimenu(handles.menu.view,...
 handles.menu.colorscheme = uimenu(handles.menu.view ,...
     'label', 'color scheme', ...
     'callback', {@fcn_options, 'color_scheme'});
-handles.menu.grid_spacing = uimenu(handles.menu.view ,...
-    'label', 'grid spacing', ...
+handles.menu.hgrid_spacing = uimenu(handles.menu.view ,...
+    'label', 'horizontal grid', ...
+    'accelerator', 'h' ,...
+    'callback', {@fcn_options, 'hgrid_spacing'});
+handles.menu.vgrid_spacing = uimenu(handles.menu.view ,...
+    'label', 'vertical grid', ...
     'accelerator', 'g' ,...
-    'callback', {@fcn_options, 'grid_spacing'});
+    'callback', {@fcn_options, 'vgrid_spacing'});
 
 % scroll bar
 % ~~~~~~~~~~  
@@ -411,28 +407,61 @@ if isfield(handles, 'plot_eeg')
     delete(handles.labels);
     delete(handles.indicator);
 end
-if isfield(handles, 'gridlines')
-    delete(handles.gridlines);
-end
 
 % calculate the time in seconds
 time = range/EEG.srate;
 set(handles.main_ax, 'xlim', [time(1), time(end)]);
+
+% plot vertical gridlines
+if handles.plot_vgrid && ~isfield(handles, 'v_gridlines')
+    % plot the line if wished and there wasn't one there already
+    inttimes = time(~mod(time, handles.v_grid_spacing)); % find all integer times
+    gridtimes = repmat(inttimes, 2, 1);
+    ylims = get(handles.main_ax, 'ylim');
+    gridlims = repmat(ylims, length(inttimes), 1)';
+    handles.v_gridlines = line(gridtimes, gridlims,...
+        'lineStyle',  ':',...
+        'color',      handles.colorscheme.fg_col_3,...
+        'parent',     handles.main_ax);
+    
+elseif handles.plot_vgrid && isfield(handles, 'v_gridlines')
+    % just update the time if line is there
+    inttimes = time(~mod(time, handles.v_grid_spacing)); % find all integer times
+    gridtimes = repmat(inttimes, 2, 1);
+    set(handles.v_gridlines, {'xdata'}, num2cell(gridtimes, 1)');
+    
+elseif ~handles.plot_vgrid && isfield(handles, 'v_gridlines')
+    % get rid of the line if turned off
+    delete(handles.v_gridlines);
+    handles = rmfield(handles, 'v_gridlines');
+    
+end
+
+% plot horizontal gridlines
+if handles.plot_hgrid && ~isfield(handles, 'h_gridlines')
+    % plot the line if wished and there wasn't one there already
+    handles.h_gridlines = line(time, ...
+        [toAdd - handles.h_grid_spacing/2; toAdd + handles.h_grid_spacing/2],...
+        'lineStyle',  '-.',...
+        'color', handles.colorscheme.fg_col_3,...
+        'parent', handles.main_ax);
+    
+elseif handles.plot_hgrid && isfield(handles, 'h_gridlines')
+    % just update the time if line is there
+    set(handles.h_gridlines, 'xdata', time);
+    
+elseif ~handles.plot_hgrid && isfield(handles, 'h_gridlines')
+    % get rid of the line if turned off
+    delete(handles.h_gridlines);
+    handles = rmfield(handles, 'h_gridlines');
+    
+end
+
+% plot the channel data
 handles.plot_eeg = line(time, data,...
     'color', handles.colorscheme.fg_col_1,...
     'parent', handles.main_ax);
 
-% plot gridlines
-if handles.plot_grid
-  inttimes = time(~mod(time, handles.grid_spacing)); % find all integer times
-  gridtimes = repmat(inttimes, 2, 1);
-  ylims = get(handles.main_ax, 'ylim');
-  gridlims = repmat(ylims, length(gridtimes), 1)';
-  handles.gridlines = line(gridtimes, gridlims,...
-      'LineStyle',  ':',...
-      'Color',      [0.6 0.6 0.6],...
-      'Parent',     handles.main_ax);
-end
 
 % Get indices of channels to hide
 hidden_idx = ismember(handles.disp_chans, handles.hidden_chans);
@@ -1040,9 +1069,19 @@ switch type
         % if different from previous
         if ~isempty(answer)
             newNumber = str2double(answer{1});
-            if newNumber ~= handles.epoch_length 
+            if newNumber ~= handles.epoch_length
                 handles.epoch_length = newNumber;
-
+                
+                % replot the grid
+                if handles.plot_vgrid
+                    delete(handles.v_gridlines);
+                    handles = rmfield(handles, 'v_gridlines');
+                end
+                if handles.plot_hgrid
+                    delete(handles.h_gridlines);
+                    handles = rmfield(handles, 'h_gridlines');
+                end
+                
                 guidata(object, handles);
                 update_main_plot(object)
             end
@@ -1082,17 +1121,43 @@ switch type
         guidata(object, handles);
         update_main_plot(object)
 
-    case 'grid_spacing'
+    case 'vgrid_spacing'
         
         % display dialogue box
         answer = inputdlg({'grid spacing (s)'} , ...
-            '', 1, {num2str( handles.grid_spacing )});
+            '', 1, {num2str( handles.v_grid_spacing )});
         
         % check for cancelled window
         if isempty(answer); return; end
         
+        % replot the grid
+        if handles.plot_vgrid
+            delete(handles.v_gridlines);
+            handles = rmfield(handles, 'v_gridlines');
+        end
+        
         % set answer
-        handles.grid_spacing = round(str2double(answer));
+        handles.v_grid_spacing = round(str2double(answer));
+        guidata(object, handles);
+        update_main_plot(object);
+        
+    case 'hgrid_spacing'
+        
+        % display dialogue box
+        answer = inputdlg({'grid spacing (s)'} , ...
+            '', 1, {num2str( handles.h_grid_spacing )});
+        
+        % check for cancelled window
+        if isempty(answer); return; end
+        
+        % replot the grid
+        if handles.plot_hgrid
+            delete(handles.h_gridlines);
+            handles = rmfield(handles, 'h_gridlines');
+        end
+        
+        % set answer
+        handles.h_grid_spacing = round(str2double(answer));
         guidata(object, handles);
         update_main_plot(object);
         
@@ -1215,6 +1280,13 @@ if isempty(event.Modifier)
                 set(handles.txt_scale, 'value', value);
             end
             
+            % replot the grid
+            if handles.plot_hgrid
+                delete(handles.h_gridlines);
+                handles = rmfield(handles, 'h_gridlines');
+                guidata(object, handles);
+            end
+           
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
@@ -1251,6 +1323,13 @@ if isempty(event.Modifier)
             else
                 value = scale + 20;
                 set(handles.txt_scale, 'value', value);
+            end
+            
+            % replot the grid
+            if handles.plot_hgrid
+                delete(handles.h_gridlines);
+                handles = rmfield(handles, 'h_gridlines');
+                guidata(object, handles);
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
@@ -1312,10 +1391,14 @@ if isempty(event.Modifier)
             cb_scrollbar(handles.vertical_scroll, []);            
             
         case 'g'
-          handles.plot_grid = ~handles.plot_grid;
+          handles.plot_vgrid = ~handles.plot_vgrid;
           guidata(object, handles);
           update_main_plot(object);
-
+          
+        case 'h'
+            handles.plot_hgrid = ~handles.plot_hgrid;
+            guidata(object, handles);
+            update_main_plot(object);
     end
 
 % check whether the ctrl is pressed also
