@@ -11,14 +11,15 @@ function EEG = csc_eeg_plotter(varargin)
        
 % TODO: Fix this ugly default setting style (e.g. handles.options...)    
 % declare defaults
-N_DISP_CHANS = 12;
 EPOCH_LENGTH = 30;
-FILTER_OPTIONS = [0.3 40];
-handles.v_grid_spacing = 1;
-handles.h_grid_spacing = 75;
-handles.plot_hgrid = 1;
-handles.plot_vgrid = 1;
-handles.plotICA = false;
+FILTER_OPTIONS = [0.3 40]; % default filter bandpass
+handles.n_disp_chans = 12; % number of initial channels to display
+handles.v_grid_spacing = 1; % vertical grid default spacing (s)
+handles.h_grid_spacing = 75; % horizontal grid default spacing (uV)
+handles.plot_hgrid = 1; % plot the horizontal grid
+handles.plot_vgrid = 1; % plot the vertical grid
+handles.plotICA = false; % plot components by default?
+handles.negative_up = false; % negative up by default (for clinicians)
 
 % define the default colorscheme to use
 handles.colorscheme = struct(...
@@ -30,7 +31,6 @@ handles.colorscheme = struct(...
     'bg_col_3',     [0.15, 0.15, 0.15] );
 
 % Set display channels
-handles.n_disp_chans = N_DISP_CHANS;
 handles.disp_chans = [1 : handles.n_disp_chans];
 
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
@@ -153,6 +153,11 @@ handles.menu.vgrid_spacing = uimenu(handles.menu.view ,...
     'label', 'vertical grid', ...
     'accelerator', 'g' ,...
     'callback', {@fcn_options, 'vgrid_spacing'});
+handles.menu.negative_toggle = uimenu(handles.menu.view,...
+    'label', 'negative up',...
+    'accelerator', 'n' ,...
+    'checked', 'off' ,...
+    'callback', {@fcn_options, 'negative_toggle'});
 
 % scroll bar
 % ~~~~~~~~~~  
@@ -369,9 +374,14 @@ else
   
   if strcmp(EEG.csc_montage.name, 'original')
       data = eegData(handles.disp_chans, range);
-  else  
+  else
       data = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
           - eegData(EEG.csc_montage.channels(handles.disp_chans, 2), range);
+  end
+  
+  % reverse data is negative up option is checked
+  if handles.negative_up
+      data = data * -1;
   end
   
   % filter the data
@@ -1057,9 +1067,18 @@ switch type
         % when changing the number of channels go back to 1
         handles.vertical_scroll.Value = -1;
         
-        % update the handles and re-plot
+        % replot the grid
+        if handles.plot_vgrid
+            delete(handles.v_gridlines);
+            handles = rmfield(handles, 'v_gridlines');
+        end
+        if handles.plot_hgrid
+            delete(handles.h_gridlines);
+            handles = rmfield(handles, 'h_gridlines');
+        end
+        
         guidata(object, handles);
-        update_main_plot(object);
+        update_main_plot(object)
         
     case 'epoch_length'
         
@@ -1161,6 +1180,21 @@ switch type
         guidata(object, handles);
         update_main_plot(object);
         
+    case 'negative_toggle'
+        % apply online filter to the data or not
+        switch get(handles.menu.negative_toggle, 'checked')
+            case 'on'
+                set(handles.menu.negative_toggle, 'checked', 'off');
+                handles.negative_up = false;
+            case 'off'
+                set(handles.menu.negative_toggle, 'checked', 'on');
+                handles.negative_up = true;
+        end
+        
+        % replot
+        guidata(object, handles);
+        update_main_plot(object);
+        
     case 'filter_toggle'
         % apply online filter to the data or not
         switch get(handles.menu.filter_toggle, 'checked')
@@ -1169,6 +1203,10 @@ switch type
             case 'off'
                 set(handles.menu.filter_toggle, 'checked', 'on');
         end
+        
+        % replot
+        guidata(object, handles);
+        update_main_plot(object);
         
     case 'filter_settings'
         
