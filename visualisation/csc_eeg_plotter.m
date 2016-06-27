@@ -23,6 +23,7 @@ PLOT_ICA = 0;
 EPOCH_LENGTH = 30;
 PLOT_GRID = 1;
 FILTER_OPTIONS = [0.3 40];
+handles.grid_spacing = 1;
 
 % define the default colorscheme to use
 handles.colorscheme = struct(...
@@ -36,6 +37,7 @@ handles.colorscheme = struct(...
 % Set display channels
 handles.n_disp_chans = N_DISP_CHANS;
 handles.disp_chans = [1 : handles.n_disp_chans];
+
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
 % on the plot, but are invisible. 
 handles.hidden_chans = [];
@@ -151,6 +153,10 @@ handles.menu.epoch_length = uimenu(handles.menu.view,...
 handles.menu.colorscheme = uimenu(handles.menu.view ,...
     'label', 'color scheme', ...
     'callback', {@fcn_options, 'color_scheme'});
+handles.menu.grid_spacing = uimenu(handles.menu.view ,...
+    'label', 'grid spacing', ...
+    'accelerator', 'g' ,...
+    'callback', {@fcn_options, 'grid_spacing'});
 
 % scroll bar
 % ~~~~~~~~~~  
@@ -418,7 +424,7 @@ handles.plot_eeg = line(time, data,...
 
 % plot gridlines
 if handles.plot_grid
-  inttimes = time(~mod(time, 1)); % find all integer times
+  inttimes = time(~mod(time, handles.grid_spacing)); % find all integer times
   gridtimes = repmat(inttimes, 2, 1);
   ylims = get(handles.main_ax, 'ylim');
   gridlims = repmat(ylims, length(gridtimes), 1)';
@@ -1076,10 +1082,22 @@ switch type
         guidata(object, handles);
         update_main_plot(object)
 
+    case 'grid_spacing'
+        
+        % display dialogue box
+        answer = inputdlg({'grid spacing (s)'} , ...
+            '', 1, {num2str( handles.grid_spacing )});
+        
+        % check for cancelled window
+        if isempty(answer); return; end
+        
+        % set answer
+        handles.grid_spacing = round(str2double(answer));
+        guidata(object, handles);
+        update_main_plot(object);
         
     case 'filter_toggle'
         % apply online filter to the data or not
-        
         switch get(handles.menu.filter_toggle, 'checked')
             case 'on'
                 set(handles.menu.filter_toggle, 'checked', 'off');
@@ -1094,9 +1112,8 @@ switch type
                     num2str( handles.filter_options(2))});
         
         % check for cancelled window        
-        if isempty(answer)
-            return;
-        end
+        if isempty(answer); return; end
+
                 
         % get and set the new values
         new_values = str2double(answer);
