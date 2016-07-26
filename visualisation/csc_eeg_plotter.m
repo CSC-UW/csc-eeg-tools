@@ -20,6 +20,8 @@ handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
 handles.plotICA = false; % plot components by default?
 handles.negative_up = false; % negative up by default (for clinicians)
+handles.number_of_event_types = 2; % how many event types do you want
+
 
 % define the default colorscheme to use
 handles.colorscheme = struct(...
@@ -88,8 +90,7 @@ handles.epoch_length = EPOCH_LENGTH;
 handles.selection.menu = uicontextmenu;
 set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
 % TODO: move to loading stage and read from file or create these defaults
-number_of_event_types = 2;
-for n = 1:number_of_event_types
+for n = 1 : handles.number_of_event_types
     handles.selection.item(n) = uimenu(handles.selection.menu,...
         'label', ['event ', num2str(n)], 'userData', n);
     set(handles.selection.item(n),...
@@ -738,19 +739,44 @@ end
 handles.fig = figure(...
     'name',         'csc event browser',...
     'numberTitle',  'off',...
-    'color',        [0.1, 0.1, 0.1],...
+    'color',        handles.csc_plotter.colorscheme.bg_col_1,...
     'menuBar',      'none',...
     'units',        'normalized',...
-    'outerPosition',[0 0.5 0.1 0.5]);
+    'outerPosition',[0 0.5 0.2 0.5]);
 
 % montage table
 handles.table = uitable(...
     'parent',       handles.fig             ,...
     'units',        'normalized'            ,...
-    'position',     [0.05, 0.1, 0.9, 0.8]   ,...
-    'backgroundcolor', [0.1, 0.1, 0.1; 0.2, 0.2, 0.2],...
-    'foregroundcolor', [0.9, 0.9, 0.9]      ,...
+    'position',     [0.05, 0.25, 0.9, 0.7]   ,...
+    'backgroundcolor', handles.csc_plotter.colorscheme.bg_col_2 ,...
+    'foregroundcolor', handles.csc_plotter.colorscheme.fg_col_1 ,...
     'columnName',   {'label','time', 'type'});
+
+% clear events
+handles.clear_button = uicontrol(...
+    'Parent',   handles.fig ,...
+    'Style',    'pushbutton' ,...
+    'String',   'clear events' ,...
+    'Units',    'normalized' ,...
+    'Position', [0.05 0.15 0.9 0.04],...
+    'FontName', 'Century Gothic' ,...
+    'FontSize', 11,...
+    'tooltipString', 'clear all events');
+set(handles.clear_button, 'callback', {@pb_event_option, 'clear'});
+
+% import events
+handles.import_button = uicontrol(...
+    'Parent',   handles.fig ,...
+    'Style',    'pushbutton' ,...
+    'String',   'import events' ,...
+    'Units',    'normalized' ,...
+    'Position', [0.05 0.10 0.9 0.04] ,...
+    'FontName', 'Century Gothic',...
+    'FontSize', 11 ,...
+    'tooltipString', 'import events' ,...
+    'enable', 'off');
+set(handles.import_button, 'callback', {@pb_event_option, 'import'});
 
 % export to workspace
 handles.export_button = uicontrol(...
@@ -762,6 +788,7 @@ handles.export_button = uicontrol(...
     'FontName', 'Century Gothic',...
     'FontSize', 11,...
     'tooltipString', 'export to workspace');
+set(handles.export_button, 'callback', {@pb_event_option, 'export'});
 
 % get the underlying java properties
 jscroll = findjobj(handles.table);
@@ -778,7 +805,6 @@ jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
 
 % set the callback for table cell selection
 set(handles.table, 'cellSelectionCallback', {@cb_select_table});
-set(handles.export_button, 'callback', {@pb_event_export});
 
 % calculate the event_data from the handles
 event_data = fcn_compute_events(handles.csc_plotter);
@@ -835,16 +861,22 @@ event_data = event_data(sort_ind, :);
 function cb_select_table(object, event_data)
 % when a cell in the table is selected, jump to that time point
 
+% if cell selection was called without selecting
+if isempty(event_data.Indices)
+    return
+end
+
+% if the event column was selected return
+if event_data.Indices(2) == 1 || isempty(event_data.Indices)
+    return
+end
+
+
 % get the handles
 handles = guidata(object);
 
 % get the data
 EEG = getappdata(handles.csc_plotter.fig, 'EEG');
-
-% if the event column was selected return
-if event_data.Indices(2) == 1
-    return
-end
 
 % return the data from the table
 table_data = get(object, 'data');
@@ -954,10 +986,21 @@ handles = guidata(object);
 % Get the EEG from the figure's appdata
 EEG = getappdata(handles.fig, 'EEG');
 
-% TODO check for current events and delete their handles
+% check for current events and delete their handles
+if isfield(handles, 'events')
+    for n = 1 : handles.number_of_event_types
+        % delete the handle
+        delete(handles.events{n});
+    end
+    % reset handle structure structure
+    handles.events = cell(handles.number_of_event_types, 1);
+end
+
+% update the GUI handles
+guidata(handles.fig, handles)
 
 % loop through each event
-for n = 1:size(EEG.csc_event_data, 1)
+for n = 1 : size(EEG.csc_event_data, 1)
     cb_event_selection(object, [], EEG.csc_event_data{n, 3}, EEG.csc_event_data{n, 2})
 end
 
@@ -1011,13 +1054,38 @@ end
 % update the GUI handles
 guidata(handles.fig, handles)
 
-function pb_event_export(object, ~)
+function pb_event_option(object, ~, option)
 % get the handles
 handles = guidata(object);
 
-% assign events to base workspace
-event_data = fcn_compute_events(handles.csc_plotter);
-assignin('base', 'event_data', event_data);
+switch option
+    case 'clear'
+        % find the row indices to delete
+        jscroll = findjobj(handles.table);
+        del_ind = jscroll.getComponent(0).getComponent(0).getSelectedRows+1;
+        
+        % get the table, delete the rows and reset the table
+        event_data = get(handles.table, 'data');
+        event_data(del_ind, :) = [];
+        set(handles.table, 'data', event_data);
+        
+        % put the new table into the structure
+        % Get the EEG from the figure's appdata
+        EEG = getappdata(handles.csc_plotter.fig, 'EEG');
+        EEG.csc_event_data = event_data;
+        setappdata(handles.csc_plotter.fig, 'EEG', EEG);
+        
+        % re-draw the event window in main
+        fcn_redraw_events(handles.csc_plotter.fig, []);
+        
+    case 'import'
+        % TODO: import from workspace variable and EEG.event
+        
+    case 'export'
+        % assign events to base workspace
+        event_data = fcn_compute_events(handles.csc_plotter);
+        assignin('base', 'event_data', event_data);
+end
 
 
 % Options Menu and their Keyboard Shortcuts
