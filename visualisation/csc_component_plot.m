@@ -4,6 +4,13 @@ function component_list = csc_component_plot(EEG)
 % make the figure
 handles = define_interface();
 
+% check for EEG.icaact
+if isempty(EEG.icaact)
+    fprintf(1, 'recalculating EEG.icaact...\n')
+    EEG.icaact = (EEG.icaweights * EEG.icasphere) ...
+        * EEG.data(EEG.icachansind, :); 
+end
+
 % allocate the component list from scratch
 number_components = size(EEG.icaact, 1);
 handles.component_list = true(number_components, 1);
@@ -11,11 +18,11 @@ handles.component_list = true(number_components, 1);
 % set some specific properties from the data
 set([handles.ax_erp_time, handles.ax_erp_image],...
     'xlim', [EEG.times(1), EEG.times(end)] / 1000);
-
+   
 % update the figure handles
 guidata(handles.fig, handles)
-setappdata(handles.fig, 'EEG', EEG);
-
+setappdata(handles.fig, 'EEG', EEG);    
+    
 % initial plot
 initial_plots(handles.fig);
 
