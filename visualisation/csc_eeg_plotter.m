@@ -97,6 +97,10 @@ for n = 1 : handles.number_of_event_types
         'callback',     {@cb_event_selection, n});
 end
 
+% create cell array of the valid numbers for keyboard shortcuts
+handles.valid_event_keys = cellfun(@num2str, num2cell(1:handles.number_of_event_types), ...
+    'uniformoutput', 0);
+
 % create the menu bar
 % ~~~~~~~~~~~~~~~~~~~
 handles.menu.file = uimenu(handles.fig, 'label', 'file');
@@ -640,7 +644,9 @@ if ~isfield(EEG, 'csc_montage')
     EEG.csc_montage.channels(:, 2) = EEG.nbchan;
 else
     % restore hidden channels
-    handles.hidden_chans = EEG.hidden_channels;
+    if isfield(EEG, 'hidden_channels')
+        handles.hidden_chans = EEG.hidden_channels;
+    end
     
     % check that the montage has enough channels to display
     if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
@@ -1505,6 +1511,16 @@ if isempty(event.Modifier)
             handles.plot_hgrid = ~handles.plot_hgrid;
             guidata(object, handles);
             update_main_plot(object);
+            
+        otherwise
+            if any(strcmp(handles.valid_event_keys, event.Character))
+                % force update the currentPoint property by using a callback
+                set(handles.fig, 'WindowButtonMotionFcn', 'x=1;');
+                current_point = get(handles.main_ax, 'currentPoint');
+
+                % create an event where the mouse cursor is
+                cb_event_selection(object, [], str2double(event.Character), current_point);
+            end               
     end
 
 % check whether the ctrl is pressed also
@@ -1528,8 +1544,7 @@ elseif strcmp(event.Modifier, 'control')
             set(handles.cPoint, 'Value',...
                 get(handles.cPoint, 'Value') + handles.epoch_length/5 * EEG.srate);
             fcn_change_time(object, [])
-    end
-    
+    end    
 end
 
 
