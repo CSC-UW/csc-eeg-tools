@@ -469,7 +469,6 @@ elseif ~handles.plot_hgrid && isfield(handles, 'h_gridlines')
     % get rid of the line if turned off
     delete(handles.h_gridlines);
     handles = rmfield(handles, 'h_gridlines');
-    
 end
 
 % plot the channel data
@@ -647,13 +646,13 @@ else
     if isfield(EEG, 'hidden_channels')
         handles.hidden_chans = EEG.hidden_channels;
     end
-    
-    % check that the montage has enough channels to display
-    if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
-        handles.n_disp_chans = length(EEG.csc_montage.label_channels);
-        handles.disp_chans = [1 : handles.n_disp_chans];
-        fprintf(1, 'Warning: reduced number of display channels to match montage\n');
-    end
+end
+
+% check that the montage has enough channels to display
+if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
+    handles.n_disp_chans = length(EEG.csc_montage.label_channels);
+    handles.disp_chans = [1 : handles.n_disp_chans];
+    fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
 % load ICA time courses if the information need to construct them is available.
@@ -688,6 +687,10 @@ if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
         end
     end
 end
+
+% adjust initially scaling to match the data
+channel_variance = std(eegData(1, :));
+set(handles.txt_scale, 'value', channel_variance * 3);
 
 % check the data length
 if EEG.pnts / EEG.srate < handles.epoch_length
@@ -1384,21 +1387,24 @@ if isempty(event.Modifier)
             
         case 'uparrow'
             scale = get(handles.txt_scale, 'value');
-            if scale <= 20
-                value = scale / 2;
-                set(handles.txt_scale, 'value', value);
-            else
-                value = scale - 20;
-                set(handles.txt_scale, 'value', value);
-            end
+            % adjust by 30%
+            value = scale / 1.3;
+            set(handles.txt_scale, 'value', value);
             
-            % replot the grid
+            % replot the grid (easier like this because new scale only calculated during plot later)
             if handles.plot_hgrid
                 delete(handles.h_gridlines);
                 handles = rmfield(handles, 'h_gridlines');
                 guidata(object, handles);
             end
            
+            % adjust vertical grid position
+            if handles.plot_vgrid
+                % get new bottom Y
+                y_lim = [value 0] * -(handles.n_disp_chans + 1 );
+               set(handles.v_gridlines, 'ydata', y_lim); 
+            end
+            
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
@@ -1429,19 +1435,22 @@ if isempty(event.Modifier)
             
         case 'downarrow'
             scale = get(handles.txt_scale, 'value');
-            if scale <= 20
-                value = scale * 2;
-                set(handles.txt_scale, 'value', value);
-            else
-                value = scale + 20;
-                set(handles.txt_scale, 'value', value);
-            end
+            % adjust by 30%
+            value = scale * 1.3;
+            set(handles.txt_scale, 'value', value);
             
             % replot the grid
             if handles.plot_hgrid
                 delete(handles.h_gridlines);
                 handles = rmfield(handles, 'h_gridlines');
                 guidata(object, handles);
+            end
+            
+             % adjust vertical grid position
+            if handles.plot_vgrid
+                % get new bottom Y
+                y_lim = [value 0] * -(handles.n_disp_chans + 1 );
+               set(handles.v_gridlines, 'ydata', y_lim); 
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
