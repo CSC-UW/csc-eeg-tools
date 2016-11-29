@@ -20,7 +20,7 @@ handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
 handles.plotICA = false; % plot components by default?
 handles.negative_up = false; % negative up by default (for clinicians)
-handles.number_of_event_types = 2; % how many event types do you want
+handles.number_of_event_types = 4; % how many event types do you want
 
 
 % define the default colorscheme to use
@@ -393,12 +393,12 @@ else % normal plotting of activity
           % calculate the average activity
           mean_activity = mean(eegData(EEG.csc_montage.channels(:, 1), :), 1);
           data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
-              - mean_activity(:, range) .* ones(handles.n_disp_chans, 1);
+              - ones(handles.n_disp_chans, 1) * mean_activity(:, range);
   end
   
   % add the scaling to the channels
   data_to_plot = data_to_plot .* ...
-      [EEG.csc_montage.scaling(handles.disp_chans, 1) .* ones(1, length(range))];
+      [EEG.csc_montage.scaling(handles.disp_chans, 1) * ones(1, length(range))];
   
   % reverse data is negative up option is checked
   if handles.negative_up
@@ -472,7 +472,7 @@ end
 if handles.plot_hgrid && ~isfield(handles, 'h_gridlines')
     % adjust the spacing based on scaling factors
     grid_spacing = [handles.h_grid_spacing/2 .* ...
-        EEG.csc_montage.scaling(handles.disp_chans, 1)] .* ones(1, length(range));
+        EEG.csc_montage.scaling(handles.disp_chans, 1)] * ones(1, length(range));
     grid_lines =  [toAdd - grid_spacing; toAdd + grid_spacing];
     % plot the lines
     handles.h_gridlines = line(time, grid_lines, ...
