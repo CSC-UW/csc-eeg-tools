@@ -20,7 +20,7 @@ handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
 handles.plotICA = false; % plot components by default?
 handles.negative_up = false; % negative up by default (for clinicians)
-handles.number_of_event_types = 4; % how many event types do you want
+handles.number_of_event_types = 6; % how many event types do you want
 
 
 % define the default colorscheme to use
@@ -67,6 +67,8 @@ handles.main_ax = axes(...
 handles.spike_ax = axes(...
     'parent',       handles.fig             ,...
     'position',     [0.05 0.075, 0.9, 0.05] ,...
+    'ylim',         [0, handles.number_of_event_types], ... % events are indicated by vertical position
+    'ydir',         'reverse'               , ... 
     'nextPlot',     'add'                   ,...
     'color',        handles.colorscheme.bg_col_2 ,...
     'xcolor',       handles.colorscheme.fg_col_1 ,...
@@ -236,7 +238,7 @@ switch nargin
             setappdata(handles.fig, 'eegData', EEG.data);
         end
         
-        EEG = initialize_loaded_eeg(handles.fig, EEG, EEG.data);
+        EEG = initialize_loaded_eeg(handles.fig, EEG, eegData);
         setappdata(handles.fig, 'EEG', EEG);
                
         % update the plot to draw current EEG
@@ -517,11 +519,10 @@ for n = 1 : handles.n_disp_chans
 end
                     
 % change the x limits of the indicator plot
-set(handles.spike_ax,   'xlim', [0, EEG.pnts * EEG.trials],...
-                        'ylim', [0, 1]);
-                    
+set(handles.spike_ax,   'xlim', [0, EEG.pnts * EEG.trials]);
+
 % add indicator line to lower plot
-handles.indicator = line([range(1), range(1)], [0, 1],...
+handles.indicator = line([range(1), range(1)], [0, handles.number_of_event_types], ...
                         'color', handles.colorscheme.fg_col_2,...
                         'linewidth', 4,...
                         'parent', handles.spike_ax,...
@@ -976,14 +977,12 @@ handles.events{event_type}(end, 2) = plot(x, y(2),...
 
 % mark the spike axes
 % ~~~~~~~~~~~~~~~~~~~
-% get the y limits of the event axes
-y = get(handles.spike_ax, 'ylim');
-
 % translate the current x point into the event axes
 sample_point = floor(x * EEG.srate);
 
-handles.events{event_type}(end, 3) = line([sample_point, sample_point], y,...
-    'color', [0.6, 0.9, 0.9],...
+handles.events{event_type}(end, 3) = line([sample_point, sample_point], ...
+    [event_type - 1, event_type], ...
+    'color', event_colors(event_type, :),...
     'parent', handles.spike_ax,...
     'userData', event_type,...
     'hitTest', 'off');
@@ -1860,6 +1859,7 @@ switch event
         data = get(handles.table, 'data');
         data{end+1, 1} = [num2str(ch), ' - '];
         data{end, 2} = ch;
+        data{end, 4} = 1;
         set(handles.table, 'data', data);
         
     case 'alt'
@@ -1913,7 +1913,7 @@ end
 
 EEG.csc_montage.label_channels  = data(:,1);
 EEG.csc_montage.channels        = cell2mat(data(:,[2,3]));
-EEG.csc_montage.scaling            = cell2mat(data(:, 4));
+EEG.csc_montage.scaling         = cell2mat(data(:, 4));
 EEG.csc_montage.reference       = ...
     handles.reference_list.String{handles.reference_list.Value};
 
@@ -1955,7 +1955,7 @@ switch event_type
     case 'add'
         % add a row of ones to the table 
         old_data = handles.table.Data;
-        new_row = {'', 1, 0};
+        new_row = {'', 1, 0, 1};
         set(handles.table, 'Data', [old_data; new_row]);
         
 end
