@@ -552,7 +552,7 @@ EEG = getappdata(handles.fig, 'EEG');
 new_start = -ceil(handles.vertical_scroll.Value);
 
 % check whether new_start and potential end make sense
-total_channels = EEG.nbchan;
+total_channels = length(EEG.csc_montage.label_channels);
 if new_start + handles.n_disp_chans - 1 < total_channels
     % change the indices of displayed channels
     handles.disp_chans = new_start : new_start + handles.n_disp_chans - 1;
