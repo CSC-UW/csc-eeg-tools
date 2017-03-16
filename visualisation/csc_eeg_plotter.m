@@ -446,6 +446,11 @@ end
 time = range/EEG.srate;
 set(handles.main_ax, 'xlim', [time(1), time(end)]);
 
+% set main axis tick labels
+main_ax_tick_times = seconds(get(handles.main_ax, 'XTick'));
+main_ax_tick_labels = cellstr(char(main_ax_tick_times, 'hh:mm:ss'));
+set(handles.main_ax, 'XTickLabels', main_ax_tick_labels);
+
 % plot vertical gridlines
 if handles.plot_vgrid && ~isfield(handles, 'v_gridlines')
     % plot the line if wished and there wasn't one there already
@@ -520,6 +525,12 @@ end
                     
 % change the x limits of the indicator plot
 set(handles.spike_ax,   'xlim', [0, EEG.pnts * EEG.trials]);
+
+% set indicator plot tick labels
+spike_ax_tick_samples = get(handles.spike_ax, 'XTick');
+spike_ax_tick_times = seconds(spike_ax_tick_samples / EEG.srate);
+spike_ax_tick_labels = cellstr(char(spike_ax_tick_times, 'hh:mm:ss'));
+set(handles.spike_ax, 'XTickLabels', spike_ax_tick_labels);
 
 % add indicator line to lower plot
 handles.indicator = line([range(1), range(1)], [0, handles.number_of_event_types], ...
