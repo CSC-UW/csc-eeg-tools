@@ -21,7 +21,7 @@ handles.plot_vgrid = 1; % plot the vertical grid
 handles.plotICA = false; % plot components by default?
 handles.negative_up = false; % negative up by default (for clinicians)
 handles.number_of_event_types = 6; % how many event types do you want
-
+handles.scoring_mode = false; % sleep scoring off by default
 
 % define the default colorscheme to use
 handles.colorscheme = struct(...
@@ -118,7 +118,7 @@ handles.menu.montage = uimenu(handles.fig, 'label', 'montage', 'enable', 'off');
 handles.menu.events = uimenu(handles.fig, 'label', 'events', 'accelerator', 'v');
 
 % options menu
-handles.menu.options    = uimenu(handles.fig, 'label', 'options');
+handles.menu.options = uimenu(handles.fig, 'label', 'options');
 handles.menu.filter_toggle = uimenu(handles.menu.options,...
     'label', 'filter toggle',...
     'checked', 'on' ,...
@@ -138,6 +138,10 @@ handles.menu.export_hidden_chans = uimenu(handles.menu.options,...
 handles.menu.export_marked_trials = uimenu(handles.menu.options,...
     'label', 'export marked trials',...
     'callback', {@fcn_options, 'export_marked_trials'});
+handles.menu.scoring_toggle = uimenu(handles.menu.options,...
+    'label', 'sleep scoring mode',...
+    'checked', 'off' ,...
+    'callback', {@fcn_options, 'scoring_mode'});
 
 % view menu
 handles.menu.view = uimenu(handles.fig, 'label', 'view');
@@ -283,7 +287,6 @@ else
     % return an empty variable
     EEG = [];
 end
-
  
 % File Loading and Saving
 % ^^^^^^^^^^^^^^^^^^^^^^^
@@ -1400,6 +1403,18 @@ switch type
             end
         end
         assignin('base', var_name, handles.trials);
+        
+    case 'scoring_mode'
+        % scoring mode toggle (numbered events indicate sleep stage)
+        switch get(handles.menu.scoring_toggle, 'checked')
+            case 'on'
+                set(handles.menu.scoring_toggle, 'checked', 'off');
+                handles.scoring_mode = false;
+            case 'off'
+                set(handles.menu.scoring_toggle, 'checked', 'on');
+                handles.scoring_mode = true;
+        end      
+        guidata(object, handles);
 end
 
 function cb_key_pressed(object, event)
@@ -1559,14 +1574,29 @@ if isempty(event.Modifier)
             update_main_plot(object);
             
         otherwise
+            % is the key a valid event key?
             if any(strcmp(handles.valid_event_keys, event.Character))
-                % force update the currentPoint property by using a callback
-                set(handles.fig, 'WindowButtonMotionFcn', 'x=1;');
-                current_point = get(handles.main_ax, 'currentPoint');
+                % check if in scoring mode
+                if ~handles.scoring_mode
+                    % force update the currentPoint property by using a callback
+                    set(handles.fig, 'WindowButtonMotionFcn', 'x=1;');
+                    current_point = get(handles.main_ax, 'currentPoint');
+                    
+                    % create an event where the mouse cursor is
+                    cb_event_selection(object, [], str2double(event.Character), current_point);
+                else
+                    % get the window position
+                    current_point = handles.main_ax.XLim(1);
+                    
+                    % set the appropriate marker at the start of the window
+                    cb_event_selection(object, [], str2double(event.Character), current_point);
 
-                % create an event where the mouse cursor is
-                cb_event_selection(object, [], str2double(event.Character), current_point);
-            end               
+                    % go to the next page
+                    new_event.Modifier = [];
+                    new_event.Key = 'rightarrow';
+                    cb_key_pressed(object, new_event);
+                end
+            end
     end
 
 % check whether the ctrl is pressed also
