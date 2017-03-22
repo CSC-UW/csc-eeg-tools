@@ -8,7 +8,11 @@ handles = define_interface();
 if isempty(EEG.icaact)
     fprintf(1, 'recalculating EEG.icaact...\n')
     EEG.icaact = (EEG.icaweights * EEG.icasphere) ...
-        * EEG.data(EEG.icachansind, :); 
+        * EEG.data(EEG.icachansind, :);
+    % convert to trials if necessary
+    if EEG.trials > 1
+        EEG.icaact = reshape(EEG.icaact, [size(EEG.icaweights, 1), EEG.pnts, EEG.trials]);
+    end
 end
 
 % allocate the component list from scratch
