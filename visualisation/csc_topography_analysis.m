@@ -1,9 +1,10 @@
-function handles = csc_topography_analysis(data1, data2, eloc, stat_option)
+function handles = csc_topography_analysis(data1, data2, eloc, stat_option, stat_type)
 % plot topography comparison of two data sets with the option of running 
 % statistical analysis
 
 if nargin < 4
     stat_option = [];
+    stat_type = 'i';
 end
 
 % define number of plots
@@ -48,6 +49,7 @@ switch stat_option
             repmat(data2', [1, 1, 2]), ...
             eloc, ...
             'nPerm', 1000, ...
+            'type', stat_type, ...
             'E_H', [0.66, 2], ...
             'flag_save', false);
         
