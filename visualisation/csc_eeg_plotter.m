@@ -360,7 +360,14 @@ end
 % since the data has not changed we can just save the EEG part, not the data
 save(fullfile(savePath, saveFile), 'EEG', '-mat');
 
-function update_main_plot(object)
+function update_main_plot(object, flag_replot)
+% main function for plotting channels in main axis
+
+% check input
+if nargin < 2
+    flag_replot = true;
+end
+
 % get the handles structure
 handles = guidata(object);
 
@@ -370,45 +377,45 @@ EEG = getappdata(handles.fig, 'EEG');
 % select the plotting data
 current_point = get(handles.cPoint, 'value');
 range = current_point : ...
-    current_point + handles.epoch_length * EEG.srate -1;
+    current_point + handles.epoch_length * EEG.srate - 1;
 
 % check for ica flag plot and get if there
 if handles.plotICA == 1
-  title(handles.main_ax, 'Component Activations', 'Color', 'w');
-  icaData = getappdata(handles.fig, 'icaData');
-  data_to_plot = icaData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
-  
+    title(handles.main_ax, 'Component Activations', 'Color', 'w');
+    icaData = getappdata(handles.fig, 'icaData');
+    data_to_plot = icaData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
+    
 else % normal plotting of activity
-  title(handles.main_ax, 'Channel Activations', 'Color', 'w');
-  eegData = getappdata(handles.fig, 'eegData');
-  
-  % check the reference type
-  switch EEG.csc_montage.reference
-      case 'inherent'
-          % keep the reference inherent to how data was loaded
-          data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
-          
-      case 'custom'
-          % use the reference stated in the montage
-          data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
-            - eegData(EEG.csc_montage.channels(handles.disp_chans, 2), range);
-        
-      case 'average'
-          % use the average activty of the channels in the montage
-          % calculate the average activity
-          mean_activity = mean(eegData(EEG.csc_montage.channels(:, 1), :), 1);
-          data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
-              - ones(handles.n_disp_chans, 1) * mean_activity(:, range);
-  end
-  
-  % add the scaling to the channels
-  data_to_plot = data_to_plot .* ...
-      [EEG.csc_montage.scaling(handles.disp_chans, 1) * ones(1, length(range))];
-  
-  % reverse data is negative up option is checked
-  if handles.negative_up
-      data_to_plot = data_to_plot * -1;
-  end
+    title(handles.main_ax, 'Channel Activations', 'Color', 'w');
+    eegData = getappdata(handles.fig, 'eegData');
+    
+    % check the reference type
+    switch EEG.csc_montage.reference
+        case 'inherent'
+            % keep the reference inherent to how data was loaded
+            data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
+            
+        case 'custom'
+            % use the reference stated in the montage
+            data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
+                - eegData(EEG.csc_montage.channels(handles.disp_chans, 2), range);
+            
+        case 'average'
+            % use the average activty of the channels in the montage
+            % calculate the average activity
+            mean_activity = mean(eegData(EEG.csc_montage.channels(:, 1), :), 1);
+            data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
+                - ones(handles.n_disp_chans, 1) * mean_activity(:, range);
+    end
+    
+    % add the scaling to the channels
+    data_to_plot = data_to_plot .* ...
+        [EEG.csc_montage.scaling(handles.disp_chans, 1) * ones(1, length(range))];
+    
+    % reverse data is negative up option is checked
+    if handles.negative_up
+        data_to_plot = data_to_plot * -1;
+    end
 end
 
 % filter the data
@@ -424,8 +431,7 @@ if strcmp(get(handles.menu.filter_toggle, 'checked'), 'on') ...
     data_to_plot = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data_to_plot'))');
 end
 
-% plot the data
-% ~~~~~~~~~~~~~
+
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
 toAdd = [1:handles.n_disp_chans]'*scale;
@@ -437,14 +443,6 @@ data_to_plot = data_to_plot + toAdd;
 set([handles.main_ax, handles.name_ax],...
     'yLim', [scale 0] * (handles.n_disp_chans + 1 ))
 
-% in the case of replotting delete the old handles
-% TODO: seems to always replot entire line... best to reset yData!
-if isfield(handles, 'plot_eeg')
-    delete(handles.plot_eeg);
-    delete(handles.labels);
-    delete(handles.indicator);
-end
-
 % calculate the time in seconds
 time = range/EEG.srate;
 set(handles.main_ax, 'xlim', [time(1), time(end)]);
@@ -454,6 +452,8 @@ main_ax_tick_times = seconds(get(handles.main_ax, 'XTick'));
 main_ax_tick_labels = cellstr(char(main_ax_tick_times, 'hh:mm:ss'));
 set(handles.main_ax, 'XTickLabels', main_ax_tick_labels);
 
+% grid plotting
+% ^^^^^^^^^^^^^
 % plot vertical gridlines
 if handles.plot_vgrid && ~isfield(handles, 'v_gridlines')
     % plot the line if wished and there wasn't one there already
@@ -500,19 +500,36 @@ elseif ~handles.plot_hgrid && isfield(handles, 'h_gridlines')
     handles = rmfield(handles, 'h_gridlines');
 end
 
+
 % plot the channel data
-handles.plot_eeg = line(time, data_to_plot,...
-    'color', handles.colorscheme.fg_col_1,...
-    'parent', handles.main_ax);
+% ^^^^^^^^^^^^^^^^^^^^^
+if flag_replot
+    % delete existing handles
+    if isfield(handles, 'plot_eeg'); delete(handles.plot_eeg); end
+    
+    % plot lines
+    handles.plot_eeg = line(time, data_to_plot,...
+        'color', handles.colorscheme.fg_col_1,...
+        'parent', handles.main_ax);
+    
+    % Get indices of channels to hide
+    hidden_idx = ismember(handles.disp_chans, handles.hidden_chans);
+    % Now hide them
+    set(handles.plot_eeg(hidden_idx), 'visible', 'off');
+    
+else
+    % just change the data
+    set(handles.plot_eeg, {'xdata'}, num2cell(time, 2));
+    set(handles.plot_eeg, {'ydata'}, num2cell(data_to_plot, 2));
+end
 
-
-% Get indices of channels to hide
-hidden_idx = ismember(handles.disp_chans, handles.hidden_chans);
-% Now hide them
-set(handles.plot_eeg(hidden_idx), 'visible', 'off');
 
 % plot the labels in their own boxes
+% ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+% delete existing handles
+if isfield(handles, 'labels'); delete(handles.labels); end
 handles.labels = zeros(handles.n_disp_chans, 1);
+% loop for each label
 for n = 1 : handles.n_disp_chans
   chn = handles.disp_chans(n);
   handles.labels(n) = ...
@@ -523,11 +540,12 @@ for n = 1 : handles.n_disp_chans
         'color', handles.colorscheme.fg_col_2,...
         'backgroundcolor', handles.colorscheme.bg_col_2,...
         'horizontalAlignment', 'center',...
+        'userdata', 1, ...
         'buttondownfcn', {@fcn_toggle_channel});
 end
                     
 % change the x limits of the indicator plot
-set(handles.spike_ax,   'xlim', [0, EEG.pnts * EEG.trials]);
+set(handles.spike_ax, 'xlim', [0, EEG.pnts * EEG.trials]);
 
 % set indicator plot tick labels
 spike_ax_tick_samples = get(handles.spike_ax, 'XTick');
@@ -536,11 +554,15 @@ spike_ax_tick_labels = cellstr(char(spike_ax_tick_times, 'hh:mm:ss'));
 set(handles.spike_ax, 'XTickLabels', spike_ax_tick_labels);
 
 % add indicator line to lower plot
-handles.indicator = line([range(1), range(1)], [0, handles.number_of_event_types], ...
-                        'color', handles.colorscheme.fg_col_2,...
-                        'linewidth', 4,...
-                        'parent', handles.spike_ax,...
-                        'hittest', 'off');
+if ~isfield(handles, 'indicator')
+    handles.indicator = line([range(1), range(1)], [0, handles.number_of_event_types], ...
+        'color', handles.colorscheme.fg_col_2,...
+        'linewidth', 4,...
+        'parent', handles.spike_ax,...
+        'hittest', 'off');
+else
+    set(handles.indicator, 'xdata', [range(1), range(1)]);
+end
                     
 % set the new parameters
 guidata(handles.fig, handles);
@@ -595,27 +617,36 @@ guidata(handles.fig, handles)
 setappdata(handles.fig, 'EEG', EEG);
 
 % update all the axes
-update_main_plot(handles.fig);
+update_main_plot(handles.fig, false);
 
 function fcn_toggle_channel(object, ~)
 % get the handles from the guidata
 handles = guidata(object);
 
 % find which of the n_disp_chans possible plot lines the selected channel is
-i = find(handles.labels == object);
+label_number = find(handles.labels == object);
 % find which channel this corresponds to
-ch = handles.disp_chans(i);
+channel_id = handles.disp_chans(label_number);
 
 % get its current state ('on' or 'off')
-state = get(handles.plot_eeg(i), 'visible');
+state = get(handles.plot_eeg(label_number), 'visible');
 
 switch state
     case 'on'
-      set(handles.plot_eeg(i), 'visible', 'off');
-      handles.hidden_chans = [handles.hidden_chans ch]; % save state
+        % check the color
+        if any(handles.plot_eeg(label_number).Color == handles.colorscheme.fg_col_1)
+            % if same color then change the color
+            set(handles.plot_eeg(label_number), 'Color', [0.16, 0.36, 0.60]);
+        else
+            % if a different color then change back but turn off
+            set(handles.plot_eeg(label_number), 'visible', 'off');
+            set(handles.plot_eeg(label_number), 'color', handles.colorscheme.fg_col_1);
+            handles.hidden_chans = [handles.hidden_chans channel_id]; % save state
+        end
+        
     case 'off'
-      set(handles.plot_eeg(i), 'visible', 'on');
-      handles.hidden_chans = handles.hidden_chans(handles.hidden_chans ~= ch);
+      set(handles.plot_eeg(label_number), 'visible', 'on');
+      handles.hidden_chans = handles.hidden_chans(handles.hidden_chans ~= channel_id);
 end
 guidata(object, handles);
 
@@ -2013,6 +2044,8 @@ montage_dir  = fullfile(fileparts(montage_dir), 'Montages');
 % get the file name
 montage_name = get(handles.montage_list, 'string');
 montage_name = montage_name{get(handles.montage_list, 'value')};
+
+% TODO: check whether montage is compatible with currently loaded dataset
 
 % set the montage back into the EEG.csc_montage
 EEG.csc_montage.name = montage_name;
