@@ -133,11 +133,13 @@ handles.menu.icatoggle = uimenu(handles.menu.options,...
     'callback', {@fcn_options, 'icatoggle'});
 handles.menu.export_hidden_chans = uimenu(handles.menu.options,...
     'label', 'export hidden channels',...
-    'accelerator', 'x', ...
     'callback', {@fcn_options, 'export_hidden_chans'});
 handles.menu.export_marked_trials = uimenu(handles.menu.options,...
     'label', 'export marked trials',...
     'callback', {@fcn_options, 'export_marked_trials'});
+handles.menu.export_axes = uimenu(handles.menu.options,...
+    'label', 'export current axes',...
+    'callback', {@fcn_options, 'export_axes'});
 handles.menu.scoring_toggle = uimenu(handles.menu.options,...
     'label', 'sleep scoring mode',...
     'checked', 'off' ,...
@@ -656,7 +658,30 @@ handles = guidata(object);
 % get position of click
 clicked_position = get(handles.spike_ax, 'currentPoint');
 
+% if scoring mode is enabled align to scoring trace
+if handles.scoring_mode
+    % Get the EEG from the figure's appdata
+    EEG = getappdata(handles.fig, 'EEG');
+    
+    % get events
+    event_data = fcn_compute_events(handles);
+    
+    % convert to ms
+    position_in_seconds = floor(clicked_position(1)/EEG.srate);
+    
+    % compare click position to event data
+    [distance, closest_event] = min(abs(cell2mat(event_data(:, 2)) - position_in_seconds));
+    
+    % if clicked too far away just ignore the adjustment
+    if abs(distance) < 200
+        clicked_position(1, 1) = event_data{closest_event, 2} * EEG.srate; 
+    end
+end
+
+% set the current point accordingly
 set(handles.cPoint, 'Value', floor(clicked_position(1,1)));
+
+% update the plots using the change time function
 fcn_change_time(object, []);
 
 function EEG = initialize_loaded_eeg(object, EEG, eegData)
@@ -975,6 +1000,8 @@ set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 fcn_change_time(handles.csc_plotter.fig, []);
 
 function cb_event_selection(object, ~, event_type, current_point)
+% TODO: small box at the top to indicate the last marker event
+
 % get the handles
 handles = guidata(object);
 % Get the EEG from the figure's appdata
@@ -1434,6 +1461,21 @@ switch type
             end
         end
         assignin('base', var_name, handles.trials);
+
+    case 'export_axes'
+        
+        % open a new figure
+        new_handle = figure('color', handles.colorscheme.bg_col_1);
+        
+        % copy the main ax
+        copyobj(handles.main_ax, new_handle);
+        delete(findobj(gca, 'type', 'line', '-and', 'markersize', 20));
+        
+        if exist('plot2svg')
+            plot2svg('eeg_plotter_svg.svg', new_handle);
+        else
+            saveas(new_handle, 'eeg_plotter_svg.svg', 'svg');
+        end
         
     case 'scoring_mode'
         % scoring mode toggle (numbered events indicate sleep stage)
@@ -1616,6 +1658,7 @@ if isempty(event.Modifier)
                     % create an event where the mouse cursor is
                     cb_event_selection(object, [], str2double(event.Character), current_point);
                 else
+                    % TODO: overwrite any marker if there is one...
                     % get the window position
                     current_point = handles.main_ax.XLim(1);
                     
