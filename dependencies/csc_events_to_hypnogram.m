@@ -1,4 +1,9 @@
 function [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, flag_plot)
+% turns event data from the csc_eeg_plotter into sleep stages and plots data
+
+% Notes
+% ^^^^^
+% ignores event 4 labels
 
 % pre-allocate to wake
 stages = single(zeros(1, EEG.pnts));
@@ -8,6 +13,11 @@ event_timing = floor([EEG.csc_event_data{:, 2}] * EEG.srate);
 
 % loop over each event
 for n = 1 : length(EEG.csc_event_data)
+    
+    % ignore "event 4" (artefacts) for basic sleep analysis
+    if EEG.csc_event_data{n, 3} == 4
+        continue
+    end
     
     if n ~= length(EEG.csc_event_data)
         stages(event_timing(n) : event_timing(n + 1)) = ...
