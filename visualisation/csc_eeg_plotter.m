@@ -427,10 +427,24 @@ if strcmp(get(handles.menu.filter_toggle, 'checked'), 'on') ...
         && handles.plotICA == 0
     
     % determine filtering parameters
-    [EEG.filter.b, EEG.filter.a] = ...
-        butter(2,[handles.filter_options(1)/(EEG.srate/2),...
-        handles.filter_options(2)/(EEG.srate/2)]);
-    data_to_plot = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data_to_plot'))');
+    % check for empty boxes for one-sided filters
+    if isnan(handles.filter_options(2))
+        
+        [filt_param_b, filt_param_a] = butter(2, ...
+            handles.filter_options(1)/(EEG.srate/2), 'high');
+        
+    elseif isnan(handles.filter_options(1))
+        
+        [filt_param_b, filt_param_a] = butter(2, ...
+            handles.filter_options(2)/(EEG.srate/2), 'low');
+    else
+        [filt_param_b, filt_param_a] = ...
+            butter(2,[handles.filter_options(1)/(EEG.srate/2),...
+            handles.filter_options(2)/(EEG.srate/2)]);
+    end
+    
+    % apply the filter to the data window
+    data_to_plot = single(filtfilt(filt_param_b, filt_param_a, double(data_to_plot'))');
 end
 
 
