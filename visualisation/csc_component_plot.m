@@ -365,6 +365,33 @@ else
     set(object, 'faceColor', [0, 1, 0]);
 end
 
+% plotting component projections
+plotter_fig_handle = findobj('Type', 'Figure', '-and', 'Name', 'csc EEG Plotter');
+
+if ~isempty(plotter_fig_handle)
+       
+    % get the guidata from the handles
+    plotter_handles = guidata(plotter_fig_handle);
+    
+    % change some property
+    plotter_handles.component_projection = 1;
+    
+    % get EEG from plotter
+    EEG_in_plotter = getappdata(plotter_handles.fig, 'EEG');
+    
+    % change good components
+    EEG_in_plotter.good_components = handles.component_list;
+    
+    % put the EEG back
+    setappdata(plotter_handles.fig, 'EEG', EEG_in_plotter);
+    
+    % update the guidata
+    guidata(plotter_handles.fig, plotter_handles)
+    
+    % update the figure
+    plotter_handles.update_axes(plotter_handles.fig, 0)
+end
+
 % update the handles
 guidata(handles.fig, handles)
 

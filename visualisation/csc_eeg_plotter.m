@@ -22,6 +22,7 @@ handles.plotICA = false; % plot components by default?
 handles.negative_up = false; % negative up by default (for clinicians)
 handles.number_of_event_types = 6; % how many event types do you want
 handles.scoring_mode = false; % sleep scoring off by default
+handles.component_projection = false; % viewing the difference between the data and remaining ica component projections
 
 % define the default colorscheme to use
 handles.colorscheme = struct(...
@@ -170,6 +171,7 @@ handles.menu.negative_toggle = uimenu(handles.menu.view,...
     'checked', 'off' ,...
     'callback', {@fcn_options, 'negative_toggle'});
 
+
 % scroll bar
 % ~~~~~~~~~~  
 handles.vertical_scroll = uicontrol(...
@@ -211,6 +213,9 @@ set(handles.menu.events,    'callback', {@fcn_event_browser});
 
 set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
+
+% put update axes function handles in handles
+handles.update_axes = @update_main_plot;
 
 
 % update the figure handles
@@ -384,7 +389,6 @@ if handles.plotICA == 1
     title(handles.main_ax, 'Component Activations', 'Color', 'w');
     icaData = getappdata(handles.fig, 'icaData');
     data_to_plot = icaData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
-    
 else % normal plotting of activity
     title(handles.main_ax, 'Channel Activations', 'Color', 'w');
     eegData = getappdata(handles.fig, 'eegData');
@@ -392,9 +396,27 @@ else % normal plotting of activity
     % check the reference type
     switch EEG.csc_montage.reference
         case 'inherent'
-            % keep the reference inherent to how data was loaded
-            data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
-            
+         
+            % check for component projections
+            if ~handles.component_projection
+                
+                % keep the reference inherent to how data was loaded
+                data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range);
+   
+            elseif handles.component_projection
+                % get the ica time series
+                icaData = getappdata(handles.fig, 'icaData');
+                
+                % recalculate data based on projections
+                projection_data = EEG.icawinv(:, EEG.good_components) ...
+                    * EEG.icaact(EEG.good_components, range);
+                
+                % subselect displayed channels
+                data_to_plot = projection_data(...
+                    EEG.csc_montage.channels(handles.disp_chans, 1), :);
+                
+            end
+                
         case 'custom'
             % use the reference stated in the montage
             data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
@@ -428,6 +450,8 @@ if strcmp(get(handles.menu.filter_toggle, 'checked'), 'on') ...
     [EEG.filter.b, EEG.filter.a] = ...
         butter(2,[handles.filter_options(1)/(EEG.srate/2),...
         handles.filter_options(2)/(EEG.srate/2)]);
+    
+    % TODO: make sure filter is run on non nan data...
     data_to_plot = single(filtfilt(EEG.filter.b, EEG.filter.a, double(data_to_plot'))');
 end
 
@@ -759,10 +783,15 @@ if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
             error('ICA unmixing matrix is too large for data');
         end
     end
+    % check for a "good_components" field
+    if ~isfield(EEG, 'good_components')
+        EEG.good_components = true(size(ica_data, 1), 1);
+    end
+    
 end
 
 % adjust initially scaling to match the data
-channel_variance = std(eegData(1, :));
+channel_variance = nanstd(eegData(1, :));
 set(handles.txt_scale, 'value', channel_variance * 3);
 
 % check the data length
