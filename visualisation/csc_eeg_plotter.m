@@ -129,7 +129,8 @@ handles.menu.filter_settings = uimenu(handles.menu.options,...
     'accelerator', 'f' ,...
     'callback', {@fcn_options, 'filter_settings'});
 handles.menu.icatoggle = uimenu(handles.menu.options,...
-    'label', 'toggle components/channels',...
+    'label', 'toggle channels/components',...
+    'checked', 'off' ,...
     'accelerator', 't', ...
     'callback', {@fcn_options, 'icatoggle'});
 handles.menu.export_hidden_chans = uimenu(handles.menu.options,...
@@ -1404,30 +1405,20 @@ switch type
         end
     
     case 'icatoggle'
-
-        answer = questdlg('What would you like to display?',...
-                          'Show/hide ICA time courses',...
-                          'Channel activations',...
-                          'ICA component activations',...
-                          'Channel activations');
-        if isempty(answer)
-          return
+        % apply online filter to the data or not
+        switch get(handles.menu.icatoggle, 'checked')
+            case 'on'
+                set(handles.menu.icatoggle, 'checked', 'off');
+                handles.plotICA = false;
+            case 'off'
+                set(handles.menu.icatoggle, 'checked', 'on');
+                handles.plotICA = true;
         end
-
-        if strcmp(answer, 'Channel activations')
-          handles.plotICA = 0;
-        end
-
-        if strcmp(answer, 'ICA component activations')
-          if isempty(getappdata(handles.fig, 'icaData'))
-            warning('No ICA data found. Doing nothing');
-          else
-            handles.plotICA = 1;
-          end
-        end
+        
+        % replot
         guidata(object, handles);
         update_main_plot(object);
-        
+               
     case 'export_hidden_chans'
         % export the hidden channels
         var_name = inputdlg('Workspace variable to export to?',...
