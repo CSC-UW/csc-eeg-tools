@@ -26,7 +26,7 @@ function channels = mff_import_signal_binary(signal_binary, channels_index, bloc
     for channel_num = 1:num_channels
         channels(channel_num).num           = channels_index(channel_num);
         channels(channel_num).sampling_rate = channel_sampling_rates(channel_num);
-        channels(channel_num).samples       = zeros(1, channel_num_samples(channel_num));
+        channels(channel_num).samples       = zeros(1, channel_num_samples(channel_num), 'single');
     end
     
     for block_num = 1:num_blocks

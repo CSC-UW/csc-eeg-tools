@@ -16,6 +16,7 @@ if isempty(EEG.icaact)
 end
 
 % allocate the component list from scratch
+% TODO: look for previously run good_components and put on component list
 number_components = size(EEG.icaact, 1);
 handles.component_list = true(number_components, 1);
 

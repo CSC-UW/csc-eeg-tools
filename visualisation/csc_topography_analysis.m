@@ -1,11 +1,17 @@
-function handles = csc_topography_analysis(data1, data2, eloc, stat_option, stat_type)
+function [handles, Results] = csc_topography_analysis(data1, data2, eloc, stat_option, stat_type)
 % plot topography comparison of two data sets with the option of running 
 % statistical analysis
+
+% defaults
+SIGNIFICANCE_THRESHOLD = 0.1;
 
 if nargin < 4
     stat_option = [];
     stat_type = 'i';
 end
+
+% assign empty output
+Results = [];
 
 % define number of plots
 no_plots = 3;
@@ -57,6 +63,6 @@ switch stat_option
         
         csc_Topoplot(Results.Obs(:, 1), eloc, ...
             'axes', handles.ax(3),...
-            'markedChannels', Results.P_Values(:, 1) < 0.05, ...
+            'markedChannels', Results.P_Values(:, 1) < SIGNIFICANCE_THRESHOLD, ...
             'markedColor', 'w');
 end
