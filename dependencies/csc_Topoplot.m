@@ -1,19 +1,16 @@
-function H = ept_Topoplot(V, e_loc, varargin)
-%% New Topoplot Function (ept)
+function H = csc_Topoplot(data_to_plot, e_loc, varargin)
+%% New Topoplot Function
 %
-% Usage H = ept_Topoplot(V, e_loc, varargin)
+% Usage H = csc_Topoplot(data_to_plot, e_loc, varargin)
 %
 % V is a single column vector of the data to be plotted (must have the length of the number of channels)
 % e_loc is the EEGLAB generated structure containing all information about electrode locations
 %
 %
 % Optional Arguments:
-% HeadWidth = Value   - Controls the width of the lines used in the drawing of the head [Default: 2.5]
-% 
-% NewFigure = 0/1     - Controls whether a new figure is created (1) or the topoplot is placed in the currently active axes (0) [Default: 0]
+% See default settings below (can all be changed as optional arguments
 
-% This file is part of the program ept_ResultViewer.
-% ept_ResultViewer is free software: you can redistribute it and/or modify
+% you can redistribute it and/or modify
 % it under the terms of the GNU General Public License as published by
 % the Free Software Foundation, either version 3 of the License, or
 % (at your option) any later version.
@@ -24,9 +21,6 @@ function H = ept_Topoplot(V, e_loc, varargin)
 % You should have received a copy of the GNU General Public License
 % along with ept_ResultViewer.  If not, see <http://www.gnu.org/licenses/>.
 
-%% Revision History
-% Version 1.0
-% 12.12.2012
 %% Set defaults
 GridScale           = 100;          % Determines the quality of the image
 HeadWidth           = 2.5;
@@ -45,7 +39,7 @@ MarkedColor         = [0, 0, 0];
 NewFigure           = 1;            % 0/1 - Whether to explicitly draw a new figure for the topoplot
 Axes                = 0;
 
-if isempty(V)
+if isempty(data_to_plot)
     fprintf(1, 'Warning: Input data was found to be empty \n');
     return;
 end
@@ -94,7 +88,7 @@ end
 
 %% Adjust Settings based on Arguments
 
-if nansum(V(:)) == 0 
+if nansum(data_to_plot(:)) == 0 
     PlotContour = 0;
 end
 
@@ -118,31 +112,41 @@ if ~isempty(MarkedChannels)
 end
 
 % Adjust the contour lines to account for the minimum and maximum difference in values
-LevelList   = linspace(min(V(:)), max(V(:)), NumContours);
+LevelList   = linspace(min(data_to_plot(:)), max(data_to_plot(:)), NumContours);
 
 
 %% Use the e_loc to project points to a 2D surface
 
-Th = pi/180*[e_loc.theta];        % Calculate theta values from x,y,z e_loc
-Rd = [e_loc.radius];              % Calculate radian values from x,y,z e_loc
+Th = pi/180*[e_loc.theta]; % Calculate theta values from x,y,z e_loc
+Rd = [e_loc.radius]; % Calculate radian values from x,y,z e_loc
 
-x = Rd.*cos(Th);                            % Calculate 2D projected X
-y = Rd.*sin(Th);                            % Calculate 2D projected Y
+x_coordinates = Rd.*cos(Th); % Calculate 2D projected X
+y_coordinates = Rd.*sin(Th); % Calculate 2D projected Y
 
 % Squeeze the coordinates into a -0.5 to 0.5 box
 intrad = min(1.0,max(abs(Rd))); intrad = max(intrad,0.5); squeezefac = 0.5/intrad;
 
-x = x*squeezefac; y = y*squeezefac;
+x_coordinates = x_coordinates * squeezefac; 
+y_coordinates = y_coordinates * squeezefac;
 
 %% Create the plotting mesh
-
-Xq = linspace(-0.5, 0.5, GridScale);
-XYq = Xq(ones(GridScale,1),:);
+XYrange = linspace(-0.5, 0.5, GridScale);
+XYmesh = XYrange(ones(GridScale,1),:);
 
 %% Create the interpolation function
-x=x(:); y=y(:); V=V(:);                     % Ensure data is in column format
-F = TriScatteredInterp(x,y,V, 'natural');
-Zi = F(XYq', XYq);
+x_coordinates=x_coordinates(:); y_coordinates=y_coordinates(:); data_to_plot = data_to_plot(:); % Ensure data is in column format
+
+% Check Matlab version for interpolant...
+if exist('scatteredInterpolant', 'file')
+    % If its available use the newest function
+    F = scatteredInterpolant(x_coordinates, y_coordinates, data_to_plot, 'natural', 'none');
+else
+    % Use the old function
+    F = TriScatteredInterp(x_coordinates, y_coordinates, data_to_plot, 'natural');
+end
+
+% apply function 
+interpolated_map = F(XYmesh', XYmesh);
 
 %% Actual Plot
 
@@ -169,7 +173,7 @@ set(H.CurrentAxes,...
 
 %% Plot the contour map
 if PlotContour == 1
-    [~,H.Contour] = contourf(H.CurrentAxes, XYq,XYq',Zi);
+    [~,H.Contour] = contourf(H.CurrentAxes, XYmesh,XYmesh',interpolated_map);
     set(H.Contour,...
         'EdgeColor',        'none'              ,...
         'LineWidth',        ContourWidth        ,...
@@ -181,7 +185,7 @@ end
 %% Plot the surface interpolation
 if PlotSurface == 1
     unsh = (GridScale+1)/GridScale; % un-shrink the effects of 'interp' SHADING
-    H.Surface = surface(XYq*unsh ,XYq'*unsh, zeros(size(Zi)), Zi);
+    H.Surface = surface(XYmesh*unsh ,XYmesh'*unsh, zeros(size(interpolated_map)), interpolated_map);
     set(H.Surface,...
         'EdgeColor',        'none'              ,...
         'FaceColor',        'interp'            ,...
@@ -231,7 +235,7 @@ end
 labels    = {e_loc.labels};
 % set the label for each individually
 for n = 1:size(labels,2)
-    H.Channels(n) = text(y(n),x(n), '.', ...
+    H.Channels(n) = text(y_coordinates(n),x_coordinates(n), '.', ...
         'userdata', char(labels(n)), ...
         'visible', 'off', ...
         'parent',  H.CurrentAxes);
