@@ -822,7 +822,7 @@ if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
         end
     end
     % check for a "good_components" field
-    if ~isfield(EEG, 'good_components')
+    if ~isfield(EEG, 'good_components') && ~isempty(EEG.icaweights)
         EEG.good_components = true(size(ica_data, 1), 1);
     end
     
