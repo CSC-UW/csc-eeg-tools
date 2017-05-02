@@ -740,12 +740,9 @@ if isfield(EEG, 'csc_montage')
     if max(EEG.csc_montage.channels(:)) > EEG.nbchan ...
             || (strcmp(EEG.csc_montage.name, 'original')...
             && size(EEG.csc_montage.channels, 1) ~= EEG.nbchan)
-        fprintf(1, 'Warning: Montage does not match data; resetting \n');
+        fprintf(1, 'Warning: Montage does not match data; resetting montage | Note that events may no longer be accurate \n');
         % delete the fields
         EEG = rmfield(EEG, 'csc_montage');
-        if isfield(EEG, 'csc_event_data')
-            EEG = rmfield(EEG, 'csc_event_data');
-        end
     end
 end
 
@@ -906,12 +903,12 @@ handles.table = uitable(...
 handles.clear_button = uicontrol(...
     'Parent',   handles.fig ,...
     'Style',    'pushbutton' ,...
-    'String',   'clear events' ,...
+    'String',   'clear event(s)' ,...
     'Units',    'normalized' ,...
     'Position', [0.05 0.15 0.9 0.04],...
     'FontName', 'Century Gothic' ,...
     'FontSize', 11,...
-    'tooltipString', 'clear all events');
+    'tooltipString', 'delete above selected events');
 set(handles.clear_button, 'callback', {@pb_event_option, 'clear'});
 
 % import events
@@ -1683,10 +1680,18 @@ if isempty(event.Modifier)
             if any(strcmp(handles.valid_event_keys, event.Character))
                 % check if in scoring mode
                 if ~handles.scoring_mode
-                    % force update the currentPoint property by using a callback
+                    % force update the currentPoint property by using any callback
                     set(handles.fig, 'WindowButtonMotionFcn', 'x=1;');
                     current_point = get(handles.main_ax, 'currentPoint');
                     
+                    % check if current mouse point is within visible window
+                    axes_x_lim = get(handles.main_ax, 'xlim');
+                    if current_point(1) < axes_x_lim(1)
+                        current_point = axes_x_lim(1);
+                    elseif current_point(1) > axes_x_lim(2)
+                        current_point = axes_x_lim(2);
+                    end
+                        
                     % create an event where the mouse cursor is
                     cb_event_selection(object, [], str2double(event.Character), current_point);
                 else
