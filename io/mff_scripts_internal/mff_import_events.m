@@ -2,7 +2,7 @@
 %%better at code writing
 %%% University of wisconsin
 function events = mff_import_events(meta_file)
-eventtracks = dir([meta_file,'\Events_*']);
+eventtracks = dir(fullfile(meta_file, 'Events_*'));
 events = struct([]);
 
 for t = 1:length(eventtracks)
