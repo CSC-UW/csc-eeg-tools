@@ -38,6 +38,7 @@ function channels = mff_import_signal_binary(signal_binary, channels_index, bloc
             num_samples = block_num_samples(block_num, channel_num);
             sample_from = channel_offsets(block_num, channel_num);
             sample_to   = sample_from + num_samples - 1;
+            % read as a single directly rather than converting after
             samples     = fread(id, [1, num_samples], '*single');
             
             channels(channel_num).samples(sample_from:sample_to) = calibrated_gains(block_num, channel_num) * (samples(:) - calibrated_zeros(block_num, channel_num));

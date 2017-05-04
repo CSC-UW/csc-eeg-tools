@@ -85,7 +85,7 @@ else
         tmpData = zeros(EEG.nbchan, mffData.signal_binaries(1).blocks.num_samples(current_channel));
         for nCh = 1:EEG.nbchan
             chData = mff_import_signal_binary(mffData.signal_binaries(1), nCh, current_channel);
-            tmpData(nCh,:) = single(chData.samples);
+            tmpData(nCh,:) = chData.samples;
         end
         
         % write the block of data to the fdt file
