@@ -16,14 +16,39 @@ if isempty(EEG.icaact)
 end
 
 % allocate the component list from scratch
+
 % TODO: look for previously run good_components and put on component list
-number_components = size(EEG.icaact, 1);
-handles.component_list = true(number_components, 1);
+if isfield(EEG, 'good_components')
+    handles.component_list = EEG.good_components;
+else
+    number_components = size(EEG.icaact, 1);
+    handles.component_list = true(number_components, 1);
+end
+
+% check for marked bad_data
+if ~isfield(EEG, 'bad_data')
+   EEG.bad_data = false(1, EEG.pnts);   
+end
 
 % set some specific properties from the data
 set([handles.ax_erp_time, handles.ax_erp_image],...
     'xlim', [EEG.times(1), EEG.times(end)] / 1000);
-   
+
+% run the frequency analysis on all components at once
+% use pwelch
+fprintf(1, 'Computing frequency spectrum for all components\n');
+window_length = 5 * EEG.srate;
+[spectral_data, spectral_range] = pwelch(...
+    EEG.icaact(:, ~EEG.bad_data)' ,... % data (transposed to channels are columns)
+    hanning(window_length) ,...    % window length with hanning windowing
+    floor(window_length / 2) , ...   % overlap
+    window_length ,...    % points in calculation (window length)
+    EEG.srate);            % sampling rate
+    
+% eliminate filtered frequencies
+handles.spectral_range = spectral_range(spectral_range < 45);
+handles.spectral_data = spectral_data(spectral_range < 45, :, :)';
+
 % update the figure handles
 guidata(handles.fig, handles)
 setappdata(handles.fig, 'EEG', EEG);    
@@ -218,6 +243,15 @@ EEG = getappdata(handles.fig, 'EEG');
 % component number
 no_comp = 1;
 
+% update the button
+if handles.component_list(no_comp)
+    % turn button green
+    set(handles.button, 'faceColor', [0, 1, 0]);
+else
+    % turn button red
+    set(handles.button, 'faceColor', [1, 0, 0]);
+end
+
 % ---------------------------- %
 % plot the image of all trials %
 % ---------------------------- %
@@ -229,32 +263,26 @@ handles.plots.image = ...
 % ------------------------- %
 % plot the evoked potential %
 % ------------------------- %
+data_to_plot = mean(EEG.icaact(no_comp, : , :), 3)';
+data_to_plot(EEG.bad_data) = nan;
 handles.plots.erp_time = ...
     plot(handles.ax_erp_time,...
-    EEG.times / 1000, mean(EEG.icaact(no_comp, : , :), 3)',...
+    EEG.times / 1000, data_to_plot,...
     'color', [0.9, 0.9, 0.9] ,...
     'lineWidth', 2);
 
 % --------------------- %
 % get the power spectra %
 % --------------------- %
-% define frequency range of interest
-freq_range = 1 : 0.25 : 35;
-
-% calculate the power spectra density using p_welch
-[fft_data, frequencies] = pwelch(...
-    reshape(EEG.icaact(no_comp, :, :), EEG.pnts * EEG.trials, []),...
-    [], [] ,...
-    freq_range ,...
-    EEG.srate );
+fft_data = handles.spectral_data(no_comp, :);
 
 % normalise the fft by 1/f
-fft_data = fft_data.* frequencies;
+fft_data = fft_data.* handles.spectral_range';
 
 % plot the spectra
 handles.plots.spectra = ...
     plot(handles.ax_spectra ,...
-    frequencies, fft_data ,...
+    handles.spectral_range, fft_data ,...
     'color', [0.9, 0.9, 0.9] ,...
     'lineWidth', 2);
 
@@ -317,22 +345,15 @@ set(handles.plots.image, ...
     'cData', squeeze(EEG.icaact(current_component, :, :))');
 
 % re-set the evoked potential %
+data_to_plot = mean(EEG.icaact(current_component, : , :), 3)';
+data_to_plot(EEG.bad_data) = nan;
 set(handles.plots.erp_time, ...
-    'ydata', mean(EEG.icaact(current_component, : , :), 3));
+    'ydata', data_to_plot);
 
 % re-set the power spectra %
-freq_range = 1 : 0.25 : 35;
-
-% calculate the power spectra density using p_welch
-[fft_data, frequencies] = pwelch(...
-    reshape(EEG.icaact(current_component, :, :), EEG.pnts * EEG.trials, []),...
-    [], [] ,...
-    freq_range ,...
-    EEG.srate );
-
+fft_data = handles.spectral_data(current_component, :);
 % normalise the fft by 1/f
-fft_data = fft_data.* frequencies;
-
+fft_data = fft_data.* handles.spectral_range';
 % plot the spectra
 set(handles.plots.spectra, ...
     'ydata', fft_data);
