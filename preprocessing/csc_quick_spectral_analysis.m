@@ -1,6 +1,9 @@
 function [spectral_data, spectral_range] = csc_quick_spectral_analysis(EEG)
 
+% flag parameters
+% TODO: put as input arguments
 flag_mastoid = false;
+flag_remove_channels = true; 
 
 % pre-allocate
 % spectral_data = nan();
@@ -8,18 +11,44 @@ spectral_window = floor(EEG.srate * 1);         % 1 second windows
 spectral_overlap = floor(spectral_window / 2);  % 50% overlap
 
 % only run on certain stages
-range_of_interest = EEG.swa_scoring.stages == 2 | EEG.swa_scoring.stages == 3;
-   
+if isfield(EEG, 'swa_scoring')
+    if length(EEG.swa_scoring) == EEG.pnts
+        range_of_interest = EEG.swa_scoring.stages == 2 | EEG.swa_scoring.stages == 3;
+    else
+        range_of_interest = true(EEG.pnts, 1);
+    end
+end
+
+% do not use bad data
+if isfield (EEG, 'bad_data')
+    fprintf(1, 'Not using segments indicated in EEG.bad_data...\n');
+    range_of_interest(EEG.bad_data) = false;
+end
+
+% remove bad channels
+if flag_remove_channels
+    if isfield (EEG, 'bad_channels')
+        fprintf(1, 'Removing bad channels...\n');
+        EEG.data(EEG.bad_channels{1}, :) = [];
+        EEG.chanlocs(EEG.bad_channels{1}) = [];
+        EEG.nbchan = size(EEG.data, 1);
+    end
+end
+
 % rereference for mastoid
 if flag_mastoid
     EEG = pop_reref(EEG, [94, 190]);
+else
+    fprintf(1, 'Performing temporary average reference...\n');
+    EEG.data = EEG.data - repmat(mean(EEG.data, 1), EEG.nbchan, 1);
 end
     
 % calculate the spectral power using pwelch
 % [1Hz bin size = 1s windows])
+fprintf(1, 'Running spectral analysis using pwelch...\n');
 [spectral_data, spectral_range] = pwelch(...
     EEG.data(:, range_of_interest)' ,... % data (transposed to channels are columns)
-    spectral_window ,...    % window length
+    hanning(spectral_window) ,...    % window length
     spectral_overlap ,...   % overlap
     spectral_window ,...    % points in calculation (window length)
     EEG.srate );            % sampling rate
@@ -31,12 +60,11 @@ spindle_range = spectral_range >= 10.9 & spectral_range <= 16.1;
 % topography
 % ''''''''''
 % calculate average power
-delta_power = double(sqrt(sum(spectral_data(delta_range, :) .^ 2)));
-spindle_power = double(sqrt(sum(spectral_data(spindle_range, :) .^ 2)));
+delta_power = double(sqrt(mean(spectral_data(delta_range, :) .^ 2)));
+spindle_power = double(sqrt(mean(spectral_data(spindle_range, :) .^ 2)));
 delta_median = median(delta_power);
 spindle_median = median(spindle_power);
 
-% plot on topography
-csc_Topoplot(delta_power, EEG.chanlocs);
-
-csc_Topoplot(spindle_power, EEG.chanlocs);
+% plot topographies
+csc_Topoplot(log(delta_power), EEG.chanlocs);
+csc_Topoplot(log(spindle_power), EEG.chanlocs);
