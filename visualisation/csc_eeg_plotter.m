@@ -834,6 +834,11 @@ if EEG.pnts / EEG.srate < handles.epoch_length
     handles.epoch_length = floor(EEG.pnts / EEG.srate);
 end
 
+% look for already hidden channels
+if isfield(EEG, 'hidden_channels')
+    handles.hidden_channels = EEG.hidden_channels;
+end
+
 % turn on the montage option
 set(handles.menu.montage, 'enable', 'on');
 
