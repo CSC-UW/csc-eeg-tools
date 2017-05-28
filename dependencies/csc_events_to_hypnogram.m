@@ -1,6 +1,8 @@
 function [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, flag_plot)
 % turns event data from the csc_eeg_plotter into sleep stages and plots data
 
+handles = [];
+
 % Notes
 % ^^^^^
 % ignores event 4 labels
@@ -44,7 +46,7 @@ if flag_plot
     % add 1 to all stages except wake
     stages(stages > 0) = stages(stages > 0) + 1;
     
-    % convert REM (now 6) to 1
+    % convert REM (now 6 after previous line) to 1
     stages(stages == 6) = 1;
     
     % convert time to hours for plot
