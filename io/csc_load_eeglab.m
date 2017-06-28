@@ -23,3 +23,8 @@ else
     EEG.data = tmp.Data.eegData;
     
 end
+
+
+% eeglab saves the data using:
+% fid = fopen(fname,'wb',fform);
+% fwrite(fid,A,'float');
