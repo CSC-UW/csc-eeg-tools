@@ -1,22 +1,21 @@
-function [data_to_filter] = csc_filter(data_to_filter, sampling_rate)
+function [data_to_filter] = csc_filter(data_to_filter, sampling_rate, high_pass, low_pass)
 % TODO: everything relevant to filtering!
 
-% NOTE: found that low pass filter applied first is better than the other way
+% NOTE: SW defaults lp: 8-12 | hp: 0.3-0.8
+if nargin < 3
+    low_pass = [8, 12];
+    high_pass = [0.3, 0.8];
+end
 
-% design lower low-pass filter
-filter_design = designfilt('lowpassiir', 'DesignMethod', 'cheby2', ...
-    'StopbandFrequency', 20, 'PassbandFrequency', 18, ...
+% design lower band-pass filter
+filter_design = designfilt('bandpassiir', 'DesignMethod', 'cheby2', ...
+    'StopbandFrequency1', high_pass(1), 'PassbandFrequency1', high_pass(2), ...
+    'StopbandFrequency2', low_pass(2), 'PassbandFrequency2', low_pass(1), ...   
     'SampleRate', sampling_rate);
 
 % apply filter
-data_to_filter = filtfilt(filter_design, data_to_filter')';
-
-% design high-pass
-filter_design = designfilt('highpassiir', 'DesignMethod', 'cheby2', ...
-    'StopbandFrequency', 4, 'PassbandFrequency', 6, ...
-    'SampleRate', sampling_rate);
-
-% apply filter
+fprintf('Applying band pass filter from %0.1f (%0.1f) to %0.1f (%0.1f) ...\n',...
+    high_pass(2), high_pass(1), low_pass(1), low_pass(2));
 data_to_filter = filtfilt(filter_design, data_to_filter')';
 
 
