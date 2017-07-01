@@ -32,9 +32,11 @@ PlotContour         = 1;            % Determines whether the contour lines are d
 PlotSurface         = 0;            % Determines whether the surface is drawn
 PlotHead            = 1;            % Determines whether the head is drawn 
 PlotChannels        = 1;            % Determines whether the channels are drawn
-MarkedChannels      = [];           % Determines whether significant channels are plotted separately
+MarkedChannels      = false(length(e_loc), 1); % Determines whether significant channels are plotted separately
 MarkedString        = '!';
 MarkedColor         = [0, 0, 0];
+
+ExcludeChannels     = [];
 
 NewFigure           = 1;            % 0/1 - Whether to explicitly draw a new figure for the topoplot
 Axes                = 0;
@@ -80,6 +82,8 @@ if nargin > 2
             MarkedString = Value;
         case 'plothead'
             PlotHead = Value;     
+        case 'excludechannels'
+            ExcludeChannels = Value;
         otherwise
             display (['Unknown parameter setting: ' Param])
     end
@@ -107,13 +111,19 @@ end
 if ~isempty(MarkedChannels)
    if length(MarkedChannels) ~= length(e_loc)
        fprintf(1, 'Warning: Marked Channels different size than number of electrodes.\n');
-       MarkedChannels = [];
+       MarkedChannels = false(length(e_loc), 1);
    end
 end
 
 % Adjust the contour lines to account for the minimum and maximum difference in values
 LevelList   = linspace(min(data_to_plot(:)), max(data_to_plot(:)), NumContours);
 
+% adjust to exclude channels
+if ~isempty(ExcludeChannels)
+   e_loc(ExcludeChannels) = []; 
+   data_to_plot(ExcludeChannels) = [];
+   MarkedChannels(ExcludeChannels) = [];
+end
 
 %% Use the e_loc to project points to a 2D surface
 
