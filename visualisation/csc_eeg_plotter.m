@@ -487,9 +487,11 @@ time = range/EEG.srate;
 set(handles.main_ax, 'xlim', [time(1), time(end)]);
 
 % set main axis tick labels
-main_ax_tick_times = seconds(get(handles.main_ax, 'XTick'));
-main_ax_tick_labels = cellstr(char(main_ax_tick_times, 'hh:mm:ss'));
-set(handles.main_ax, 'XTickLabels', main_ax_tick_labels);
+if exist('seconds', 'file')
+    main_ax_tick_times = seconds(get(handles.main_ax, 'XTick'));
+    main_ax_tick_labels = cellstr(char(main_ax_tick_times, 'hh:mm:ss'));
+    set(handles.main_ax, 'XTickLabels', main_ax_tick_labels);
+end
 
 % grid plotting
 % ^^^^^^^^^^^^^
@@ -587,10 +589,12 @@ end
 set(handles.spike_ax, 'xlim', [0, EEG.pnts * EEG.trials]);
 
 % set indicator plot tick labels
-spike_ax_tick_samples = get(handles.spike_ax, 'XTick');
-spike_ax_tick_times = seconds(spike_ax_tick_samples / EEG.srate);
-spike_ax_tick_labels = cellstr(char(spike_ax_tick_times, 'hh:mm:ss'));
-set(handles.spike_ax, 'XTickLabels', spike_ax_tick_labels);
+if exist('seconds', 'file')
+    spike_ax_tick_samples = get(handles.spike_ax, 'XTick');
+    spike_ax_tick_times = seconds(spike_ax_tick_samples / EEG.srate);
+    spike_ax_tick_labels = cellstr(char(spike_ax_tick_times, 'hh:mm:ss'));
+    set(handles.spike_ax, 'XTickLabels', spike_ax_tick_labels);
+end
 
 % add indicator line to lower plot
 if ~isfield(handles, 'indicator')
@@ -621,6 +625,7 @@ if new_start + handles.n_disp_chans - 1 < total_channels
     % change the indices of displayed channels
     handles.disp_chans = new_start : new_start + handles.n_disp_chans - 1;
 else
+    handles.vertical_scroll.Value = -[total_channels - handles.n_disp_chans + 1];
     handles.disp_chans = total_channels - handles.n_disp_chans + 1 : total_channels;
 end
 
@@ -673,7 +678,7 @@ state = get(handles.plot_eeg(label_number), 'visible');
 switch state
     case 'on'
         % check the color
-        if any(handles.plot_eeg(label_number).Color == handles.colorscheme.fg_col_1)
+        if any(get(handles.plot_eeg(label_number), 'color') == handles.colorscheme.fg_col_1)
             % if same color then change the color
             set(handles.plot_eeg(label_number), 'Color', [0.16, 0.36, 0.60]);
         else
@@ -1654,7 +1659,8 @@ if isempty(event.Modifier)
             end
             
             % redraw the plot by calling the scroll callback
-            cb_scrollbar(handles.vertical_scroll, []);            
+            guidata(object, handles);
+            cb_scrollbar(handles.fig, []);            
 
         case 'pagedown'
             
@@ -1668,7 +1674,8 @@ if isempty(event.Modifier)
             end
             
             % redraw the plot by calling the scroll callback
-            cb_scrollbar(handles.vertical_scroll, []);            
+            guidata(object, handles);
+            cb_scrollbar(handles.fig, []);            
             
         case 'g'
           handles.plot_vgrid = ~handles.plot_vgrid;
@@ -1702,7 +1709,12 @@ if isempty(event.Modifier)
                 else
                     % TODO: overwrite any marker if there is one...
                     % get the window position
-                    current_point = handles.main_ax.XLim(1);
+                    if verLessThan('matlab', '8.4')
+                        tmp_limits = get(handles.main_ax, 'xlim');
+                        current_point = tmp_limits(1);
+                    else
+                        current_point = handles.main_ax.XLim(1);
+                    end
                     
                     % set the appropriate marker at the start of the window
                     cb_event_selection(object, [], str2double(event.Character), current_point);
@@ -2080,12 +2092,19 @@ if any(any(cellfun(@(x) ~isa(x, 'double'), data(:,[2,3]))))
     fprintf(1, 'Warning: check that all channel inputs are numbers\n');
 end
 
-EEG.csc_montage.label_channels  = data(:,1);
-EEG.csc_montage.channels        = cell2mat(data(:,[2,3]));
-EEG.csc_montage.scaling         = cell2mat(data(:, 4));
-EEG.csc_montage.reference       = ...
-    handles.reference_list.String{handles.reference_list.Value};
+EEG.csc_montage.label_channels = data(:,1);
+EEG.csc_montage.channels = cell2mat(data(:,[2,3]));
+EEG.csc_montage.scaling = cell2mat(data(:, 4));
 
+% compatibility with older matlab versions (handles dot notation).
+if verLessThan('matlab', '8.4')
+    tmp_list = get(handles.reference_list, 'String');
+    EEG.csc_montage.reference = tmp_list{get(handles.reference_list, 'Value')};
+else
+    EEG.csc_montage.reference = ...
+        handles.reference_list.String{handles.reference_list.Value};
+end
+    
 % adjust the number of channels to display if necessary
 if length(EEG.csc_montage.label_channels) < handles.csc_plotter.n_disp_chans
     handles.csc_plotter.n_disp_chans = length(EEG.csc_montage.label_channels);
@@ -2101,10 +2120,12 @@ handles.csc_plotter.vertical_scroll.Value = -1;
 handles.csc_plotter.vertical_scroll.Min = -(EEG.nbchan - length(handles.csc_plotter.disp_chans));
 
 % change montage name
-if isempty(handles.montage_list.String{handles.montage_list.Value})
+% compatibility with older matlab versions (handles dot notation).
+tmp_list = get(handles.montage_list, 'string');
+if isempty(tmp_list)
     EEG.csc_montage.name = 'custom';
 else
-    EEG.csc_montage.name = handles.montage_list.String{handles.montage_list.Value};
+    EEG.csc_montage.name = tmp_list{get(handles.montage_list, 'Value')};
 end
     
 % update the handle structures
@@ -2114,7 +2135,7 @@ setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 % update the plot using the scrollbar callback
 % update_main_plot(handles.csc_plotter.fig);
-cb_scrollbar(handles.csc_plotter.vertical_scroll, []);
+cb_scrollbar(handles.csc_plotter.fig, []);
 
 function fcn_montage_buttons(object, ~, event_type)
 % get the montage handles
