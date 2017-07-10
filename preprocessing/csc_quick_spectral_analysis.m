@@ -11,12 +11,10 @@ spectral_window = floor(EEG.srate * 1);         % 1 second windows
 spectral_overlap = floor(spectral_window / 2);  % 50% overlap
 
 % only run on certain stages
-if isfield(EEG, 'swa_scoring')
-    if length(EEG.swa_scoring) == EEG.pnts
-        range_of_interest = EEG.swa_scoring.stages == 2 | EEG.swa_scoring.stages == 3;
-    else
-        range_of_interest = true(EEG.pnts, 1);
-    end
+if isfield(EEG, 'swa_scoring') && length(EEG.swa_scoring) == EEG.pnts
+    range_of_interest = EEG.swa_scoring.stages == 2 | EEG.swa_scoring.stages == 3;
+else
+    range_of_interest = true(EEG.pnts, 1);
 end
 
 % do not use bad data
@@ -46,12 +44,27 @@ end
 % calculate the spectral power using pwelch
 % [1Hz bin size = 1s windows])
 fprintf(1, 'Running spectral analysis using pwelch...\n');
-[spectral_data, spectral_range] = pwelch(...
-    EEG.data(:, range_of_interest)' ,... % data (transposed to channels are columns)
-    hanning(spectral_window) ,...    % window length
-    spectral_overlap ,...   % overlap
-    spectral_window ,...    % points in calculation (window length)
-    EEG.srate );            % sampling rate
+if ~verLessThan('matlab', '8.4')
+    [spectral_data, spectral_range] = pwelch(...
+        EEG.data(:, range_of_interest)' ,... % data (transposed to channels are columns)
+        hanning(spectral_window) ,...    % window length
+        spectral_overlap ,...   % overlap
+        spectral_window ,...    % points in calculation (window length)
+        EEG.srate );            % sampling rate
+else
+    % pre-allocate
+    spectral_data = nan(EEG.nbchan, EEG.srate/2 + 1);
+    swa_progress_indicator('initialise', 'channels complete');
+    for n = 1 : EEG.nbchan
+        swa_progress_indicator('update', n, EEG.nbchan);
+        [spectral_data(n, :), spectral_range] = pwelch(...
+            EEG.data(n, range_of_interest)' ,... % data (transposed to channels are columns)
+            hanning(spectral_window) ,...    % window length
+            spectral_overlap ,...   % overlap
+            spectral_window ,...    % points in calculation (window length)
+            EEG.srate );            % sampling rate
+    end
+end
 
 % define ranges of interest
 delta_range = spectral_range >= 0.9 & spectral_range <= 4.1;

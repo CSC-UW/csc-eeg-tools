@@ -55,7 +55,7 @@ handles.fig = figure(...
 % main axes
 handles.main_ax = axes(...
     'parent',       handles.fig             ,...
-    'position',     [0.05 0.2, 0.9, 0.75]   ,...
+    'position',     [0.025 0.2, 0.95, 0.75]   ,...
     'nextPlot',     'add'                   ,...
     'color',        handles.colorscheme.bg_col_2 ,...
     'xcolor',       handles.colorscheme.fg_col_1 ,...
@@ -67,7 +67,7 @@ handles.main_ax = axes(...
 % navigation/spike axes
 handles.spike_ax = axes(...
     'parent',       handles.fig             ,...
-    'position',     [0.05 0.075, 0.9, 0.05] ,...
+    'position',     [0.025 0.075, 0.95, 0.05] ,...
     'ylim',         [0, handles.number_of_event_types], ... % events are indicated by vertical position
     'ydir',         'reverse'               , ... 
     'nextPlot',     'add'                   ,...
@@ -173,19 +173,6 @@ handles.menu.negative_toggle = uimenu(handles.menu.view,...
     'accelerator', 'n' ,...
     'checked', 'off' ,...
     'callback', {@fcn_options, 'negative_toggle'});
-
-
-% scroll bar
-% ~~~~~~~~~~  
-handles.vertical_scroll = uicontrol(...
-    'Parent',   handles.fig,...
-    'Units',    'normalized',...
-    'Style',    'slider',...
-    'Position', [0.01, 0.4, 0.015, 0.4],...
-    'Max',      -1,...
-    'Min',      -(length(handles.disp_chans)),...
-    'value',    -1,...
-    'callback', @cb_scrollbar);
 
 % scale indicator
 % ~~~~~~~~~~~~~~~
@@ -487,7 +474,7 @@ time = range/EEG.srate;
 set(handles.main_ax, 'xlim', [time(1), time(end)]);
 
 % set main axis tick labels
-if exist('seconds', 'file')
+if ~verLessThan('matlab', '8.4')
     main_ax_tick_times = seconds(get(handles.main_ax, 'XTick'));
     main_ax_tick_labels = cellstr(char(main_ax_tick_times, 'hh:mm:ss'));
     set(handles.main_ax, 'XTickLabels', main_ax_tick_labels);
@@ -574,7 +561,7 @@ handles.labels = zeros(handles.n_disp_chans, 1);
 for n = 1 : handles.n_disp_chans
   chn = handles.disp_chans(n);
   handles.labels(n) = ...
-        text(0.5, toAdd(n, 1) + scale / 5, EEG.csc_montage.label_channels{chn},...
+        text(0.25, toAdd(n, 1) + scale / 5, EEG.csc_montage.label_channels{chn},...
         'parent', handles.name_ax,...
         'fontsize',   12,...
         'fontweight', 'bold',...
@@ -589,7 +576,7 @@ end
 set(handles.spike_ax, 'xlim', [0, EEG.pnts * EEG.trials]);
 
 % set indicator plot tick labels
-if exist('seconds', 'file')
+if ~verLessThan('matlab', '8.4')
     spike_ax_tick_samples = get(handles.spike_ax, 'XTick');
     spike_ax_tick_times = seconds(spike_ax_tick_samples / EEG.srate);
     spike_ax_tick_labels = cellstr(char(spike_ax_tick_times, 'hh:mm:ss'));
@@ -610,28 +597,6 @@ end
 % set the new parameters
 guidata(handles.fig, handles);
 setappdata(handles.fig, 'EEG', EEG);
-
-function cb_scrollbar(object, ~)
-% callback to the change the displayed channels
-handles = guidata(object);
-EEG = getappdata(handles.fig, 'EEG');
-
-% calculate the new display channel range
-new_start = -ceil(handles.vertical_scroll.Value);
-
-% check whether new_start and potential end make sense
-total_channels = length(EEG.csc_montage.label_channels);
-if new_start + handles.n_disp_chans - 1 < total_channels
-    % change the indices of displayed channels
-    handles.disp_chans = new_start : new_start + handles.n_disp_chans - 1;
-else
-    handles.vertical_scroll.Value = -[total_channels - handles.n_disp_chans + 1];
-    handles.disp_chans = total_channels - handles.n_disp_chans + 1 : total_channels;
-end
-
-% update the handles and replot the data
-guidata(handles.fig, handles);
-update_main_plot(object);
 
 function fcn_change_time(object, ~)
 % get the handles from the guidata
@@ -1367,7 +1332,7 @@ switch type
     case 'vgrid_spacing'
         
         % display dialogue box
-        answer = inputdlg({'grid spacing (s)'} , ...
+        answer = inputdlg({'grid spacing (uV)'} , ...
             '', 1, {num2str( handles.v_grid_spacing )});
         
         % check for cancelled window
@@ -1387,7 +1352,7 @@ switch type
     case 'hgrid_spacing'
         
         % display dialogue box
-        answer = inputdlg({'grid spacing (s)'} , ...
+        answer = inputdlg({'grid spacing (uV)'} , ...
             '', 1, {num2str( handles.h_grid_spacing )});
         
         % check for cancelled window
@@ -1649,33 +1614,31 @@ if isempty(event.Modifier)
 
         case 'pageup'
             
-            % get the current top visible channel
-            top_channel = -handles.vertical_scroll.Value;
+            top_channel = handles.disp_chans(1);
             
-            if top_channel - handles.n_disp_chans < 1
-                handles.vertical_scroll.Value = -1;
+            if top_channel -  handles.n_disp_chans < 1
+                handles.disp_chans = 1 : handles.n_disp_chans;
             else
-                handles.vertical_scroll.Value = -(top_channel - handles.n_disp_chans); 
+                handles.disp_chans = top_channel - handles.n_disp_chans : top_channel - 1;
             end
             
             % redraw the plot by calling the scroll callback
             guidata(object, handles);
-            cb_scrollbar(handles.fig, []);            
+            update_main_plot(object);
 
         case 'pagedown'
             
-            % get the current top visible channel
-            bottom_channel = -handles.vertical_scroll.Value + handles.n_disp_chans -1;
+            bottom_channel = handles.disp_chans(end);
             
-            if bottom_channel + handles.n_disp_chans > -handles.vertical_scroll.Min
-                handles.vertical_scroll.Value = handles.vertical_scroll.Min;
+            if bottom_channel +  handles.n_disp_chans - 1 > size(EEG.csc_montage.channels, 1)
+                handles.disp_chans = size(EEG.csc_montage.channels, 1) -  handles.n_disp_chans + 1 : size(EEG.csc_montage.channels, 1);
             else
-                handles.vertical_scroll.Value = -(bottom_channel + 1);
+                handles.disp_chans = bottom_channel + 1 : bottom_channel + handles.n_disp_chans;
             end
-            
+                        
             % redraw the plot by calling the scroll callback
             guidata(object, handles);
-            cb_scrollbar(handles.fig, []);            
+            update_main_plot(object);
             
         case 'g'
           handles.plot_vgrid = ~handles.plot_vgrid;
@@ -1728,7 +1691,7 @@ if isempty(event.Modifier)
     end
 
 % check whether the ctrl is pressed also
-elseif strcmp(event.Modifier, 'control')
+elseif any(strcmp(event.Modifier, {'control', 'alt'}))
     
     switch event.Key
         case 'c'
@@ -1748,6 +1711,30 @@ elseif strcmp(event.Modifier, 'control')
             set(handles.cPoint, 'Value',...
                 get(handles.cPoint, 'Value') + handles.epoch_length/5 * EEG.srate);
             fcn_change_time(object, [])
+            
+        case 'pageup'
+            
+            top_channel = handles.disp_chans(1);
+            
+            if top_channel ~= 1
+                handles.disp_chans = handles.disp_chans - 1;
+            end
+            
+            % redraw the plot by calling the scroll callback
+            guidata(object, handles);
+            update_main_plot(object);
+            
+        case 'pagedown'
+            
+            bottom_channel = handles.disp_chans(end);
+            
+            if bottom_channel ~=  size(EEG.csc_montage.channels, 1)
+                handles.disp_chans = handles.disp_chans + 1;
+            end
+            
+            % redraw the plot by calling the scroll callback
+            guidata(object, handles);
+            update_main_plot(object);
     end    
 end
 
@@ -2133,9 +2120,9 @@ guidata(handles.fig, handles);
 guidata(handles.csc_plotter.fig, handles.csc_plotter);
 setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
-% update the plot using the scrollbar callback
-% update_main_plot(handles.csc_plotter.fig);
-cb_scrollbar(handles.csc_plotter.fig, []);
+% update the plot
+update_main_plot(handles.csc_plotter.fig);
+
 
 function fcn_montage_buttons(object, ~, event_type)
 % get the montage handles
