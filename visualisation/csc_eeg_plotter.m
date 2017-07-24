@@ -760,39 +760,29 @@ end
 % load ICA time courses if the information need to construct them is available.
 if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
     if ~isempty(EEG.icaweights) && ~isempty(EEG.icasphere)
-        % If we have the same number of components as channels...
-        if size(EEG.icaweights, 1) == size(eegData, 1)
-            % check for epoched data
-            ica_data = (EEG.icaweights * EEG.icasphere) ...
-                * EEG.data(EEG.icachansind, :);
-            
-            setappdata(handles.fig, 'icaData', ica_data);
-            % If we have fewer components than channels (maybe you've already removed
-            % some of them), then pad the ICA weights with zeros and produce component
-            % activations as if you had the same number of components as channels.
-            
-        elseif size(EEG.icaweights, 1) < size(eegData,1)
+        % re-calculate the ICA activations
+        ica_data = (EEG.icaweights * EEG.icasphere) ...
+            * EEG.data(EEG.icachansind, :);
+        
+        % pad the remaining data in case not equal size
+        if ~[size(EEG.icaweights, 1) == size(eegData, 1)]
             dimdiff = size(eegData, 1) - size(EEG.icaweights, 1);
-            pad = zeros(dimdiff, size(EEG.icaweights, 2));
-            paddedweights = [EEG.icaweights ; pad];
-            try
-                ica_data = paddedweights * EEG.icasphere * eegData;
-            catch
-                fprintf('%s. %s.\n',...
-                    'Data were reinterpolated after IC removal',...
-                    'Can no longer display IC activations');
-                ica_data = zeros(size(eegData));
-            end
-            setappdata(handles.fig, 'icaData', ica_data);
-        else
-            error('ICA unmixing matrix is too large for data');
+            pad = zeros(dimdiff, size(eegData, 2));
+            
+            % add to ica activations
+            ica_data = [ica_data; pad];
+            
         end
+        
+        % save the ica data to the handles structure
+        setappdata(handles.fig, 'icaData', ica_data);
+        
+        % check for a "good_components" field
+        if ~isfield(EEG, 'good_components')
+            EEG.good_components = true(size(EEG.icaweights, 1), 1);
+        end
+        
     end
-    % check for a "good_components" field
-    if ~isfield(EEG, 'good_components') && ~isempty(EEG.icaweights)
-        EEG.good_components = true(size(ica_data, 1), 1);
-    end
-    
 end
 
 % adjust initially scaling to match the data
@@ -809,19 +799,19 @@ if isfield(EEG, 'hidden_channels')
     handles.hidden_channels = EEG.hidden_channels;
 end
 
+% look for bad trials
+if isfield(EEG, 'marked_trials')
+    handles.trials = EEG.marked_trials;
+else
+    % allocate marked trials
+    handles.trials = false(EEG.trials, 1);
+end
+
 % turn on the montage option
 set(handles.menu.montage, 'enable', 'on');
 
-% allocate marked trials
-handles.trials = false(EEG.trials, 1);
-guidata(handles.fig, handles)
-
 % update the handles
 guidata(object, handles);
-
-% reset the scrollbar values
-handles.vertical_scroll.Max = -1;
-handles.vertical_scroll.Min = -(EEG.nbchan - length(handles.disp_chans) + 1);
 
 function fcn_close_window(object, ~)
 % just resume the ui if the figure is closed
@@ -1153,6 +1143,9 @@ handles.trial_borders = plot(x, y(1),...
     'markerFaceColor', [0.6, 0.6, 0.6],...
     'parent', handles.main_ax,...
     'buttonDownFcn', {@bdf_mark_trial});
+
+% set previously marked trials color
+set(handles.trial_borders(handles.trials), 'markerFaceColor', [0.9, 0.2, 0.2]);
 
 % update the GUI handles
 guidata(handles.fig, handles)
