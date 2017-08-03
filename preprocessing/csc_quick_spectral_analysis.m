@@ -1,4 +1,10 @@
-function [spectral_data, spectral_range] = csc_quick_spectral_analysis(EEG)
+function [spectral_data, spectral_range] = csc_quick_spectral_analysis(EEG, flag_plot)
+% performs 1 second window spectral analysis using pwelch on EEG structure
+
+% check inputs
+if nargin < 2
+    flag_plot = true;
+end
 
 % flag parameters
 % TODO: put as input arguments
@@ -26,9 +32,16 @@ end
 % remove bad channels
 if flag_remove_channels
     if isfield (EEG, 'bad_channels')
+        % bad channels should be a cell array of lists
         fprintf(1, 'Removing bad channels...\n');
         EEG.data(EEG.bad_channels{1}, :) = [];
         EEG.chanlocs(EEG.bad_channels{1}) = [];
+        EEG.nbchan = size(EEG.data, 1);
+    elseif isfield (EEG, 'good_channels')
+        % good channels should be a logical vector
+        fprintf(1, 'Removing bad channels...\n');
+        EEG.data(~EEG.good_channels, :) = [];
+        EEG.chanlocs(~EEG.good_channels) = [];
         EEG.nbchan = size(EEG.data, 1);
     end
 end
@@ -66,18 +79,20 @@ else
     end
 end
 
-% define ranges of interest
-delta_range = spectral_range >= 0.9 & spectral_range <= 4.1;
-spindle_range = spectral_range >= 10.9 & spectral_range <= 16.1;
-
 % topography
 % ''''''''''
-% calculate average power
-delta_power = double(sqrt(mean(spectral_data(delta_range, :) .^ 2)));
-spindle_power = double(sqrt(mean(spectral_data(spindle_range, :) .^ 2)));
-delta_median = median(delta_power);
-spindle_median = median(spindle_power);
-
-% plot topographies
-csc_Topoplot(log(delta_power), EEG.chanlocs);
-csc_Topoplot(log(spindle_power), EEG.chanlocs);
+if flag_plot
+    % define ranges of interest
+    delta_range = spectral_range >= 0.9 & spectral_range <= 4.1;
+    spindle_range = spectral_range >= 10.9 & spectral_range <= 16.1;
+    
+    % calculate average power
+    delta_power = double(sqrt(mean(spectral_data(delta_range, :) .^ 2)));
+    spindle_power = double(sqrt(mean(spectral_data(spindle_range, :) .^ 2)));
+    delta_median = median(delta_power);
+    spindle_median = median(spindle_power);
+    
+    % plot topographies
+    csc_Topoplot(log(delta_power), EEG.chanlocs);
+    csc_Topoplot(log(spindle_power), EEG.chanlocs);
+end
