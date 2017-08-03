@@ -4,6 +4,19 @@ function component_list = csc_component_plot(EEG)
 % make the figure
 handles = define_interface();
 
+% check for good channels field in EEG
+if ~isfield(EEG, 'good_channels')
+    EEG.good_channels = true(EEG.nbchan, 1);
+end
+
+% check for marked bad_data
+if ~isfield(EEG, 'bad_data')
+   EEG.bad_data = false(1, EEG.pnts);   
+end
+
+% save the EEG to the figure
+setappdata(handles.fig, 'EEG', EEG);    
+
 % check for EEG.icaact
 if isempty(EEG.icaact)
     fprintf(1, 'recalculating EEG.icaact...\n')
@@ -25,21 +38,23 @@ else
     handles.component_list = true(number_components, 1);
 end
 
-% check for marked bad_data
-if ~isfield(EEG, 'bad_data')
-   EEG.bad_data = false(1, EEG.pnts);   
-end
-
 % set some specific properties from the data
 set([handles.ax_erp_time, handles.ax_erp_image],...
     'xlim', [EEG.times(1), EEG.times(end)] / 1000);
+
+% check if trialed data
+if EEG.trials > 1
+    ica_data = reshape(EEG.icaact, size(EEG.icaact, 1), []);
+else
+    ica_data = EEG.icaact;
+end
 
 % run the frequency analysis on all components at once
 % use pwelch
 fprintf(1, 'Computing frequency spectrum for all components\n');
 window_length = 5 * EEG.srate;
 [spectral_data, spectral_range] = pwelch(...
-    EEG.icaact(:, ~EEG.bad_data)' ,... % data (transposed to channels are columns)
+    ica_data' ,... % data (transposed to channels are columns)
     hanning(window_length) ,...    % window length with hanning windowing
     floor(window_length / 2) , ...   % overlap
     window_length ,...    % points in calculation (window length)
@@ -51,7 +66,6 @@ handles.spectral_data = spectral_data(spectral_range < 45, :, :)';
 
 % update the figure handles
 guidata(handles.fig, handles)
-setappdata(handles.fig, 'EEG', EEG);    
     
 % initial plot
 initial_plots(handles.fig);
@@ -264,7 +278,12 @@ handles.plots.image = ...
 % plot the evoked potential %
 % ------------------------- %
 data_to_plot = mean(EEG.icaact(no_comp, : , :), 3)';
-data_to_plot(EEG.bad_data) = nan;
+if isfield(EEG, 'bad_data')
+    data_to_plot(EEG.bad_data) = nan;
+elseif isfield(EEG, 'good_data')
+    data_to_plot(~EEG.good_data) = nan;
+end
+
 handles.plots.erp_time = ...
     plot(handles.ax_erp_time,...
     EEG.times / 1000, data_to_plot,...
@@ -290,7 +309,7 @@ handles.plots.spectra = ...
 % plot the topography %
 % ------------------- %
 handles.plots.topo = ...
-    csc_Topoplot(EEG.icawinv(:, no_comp), EEG.chanlocs ,...
+    csc_Topoplot(EEG.icawinv(:, no_comp), EEG.chanlocs(EEG.good_channels) ,...
     'axes', handles.ax_topoplot ,...
     'plotChannels', false);
 
@@ -362,7 +381,7 @@ set(handles.plots.spectra, ...
 % plot the topography %
 % ------------------- %
 handles.plots.topo = ...
-    csc_Topoplot(EEG.icawinv(:, current_component), EEG.chanlocs ,...
+    csc_Topoplot(EEG.icawinv(:, current_component), EEG.chanlocs(EEG.good_channels),...
     'axes', handles.ax_topoplot ,...
     'plotChannels', false);
 
