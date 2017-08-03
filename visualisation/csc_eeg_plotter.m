@@ -12,7 +12,7 @@ function EEG = csc_eeg_plotter(varargin)
 % TODO: Fix this ugly default setting style (e.g. handles.options...)    
 % declare defaults
 EPOCH_LENGTH = 30;
-FILTER_OPTIONS = [0.3 40]; % default filter bandpass
+FILTER_OPTIONS = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bandpass
 handles.n_disp_chans = 12; % number of initial channels to display
 handles.v_grid_spacing = 1; % vertical grid default spacing (s)
 handles.h_grid_spacing = 75; % horizontal grid default spacing (uV)
@@ -127,7 +127,7 @@ handles.menu.filter_toggle = uimenu(handles.menu.options,...
 handles.menu.filter_settings = uimenu(handles.menu.options,...
     'label', 'filter settings',...
     'accelerator', 'f' ,...
-    'callback', {@fcn_options, 'filter_settings'});
+    'callback', {@fcn_filter_settings});
 handles.menu.icatoggle = uimenu(handles.menu.options,...
     'label', 'toggle channels/components',...
     'checked', 'off' ,...
@@ -436,25 +436,38 @@ end
 if strcmp(get(handles.menu.filter_toggle, 'checked'), 'on') ...
         && handles.plotICA == 0
     
-    % determine filtering parameters
-    % check for empty boxes for one-sided filters
-    if isnan(handles.filter_options(2))
+    % calculate and filter separately for each channel type
+    for n = 1 : 4
         
-        [filt_param_b, filt_param_a] = butter(2, ...
-            handles.filter_options(1)/(EEG.srate/2), 'high');
+        % which channels to apply this to
+        channel_ind = handles.channel_types(handles.disp_chans) == n;
         
-    elseif isnan(handles.filter_options(1))
+        % check if relevant
+        if sum(channel_ind) == 0
+            continue
+        end
         
-        [filt_param_b, filt_param_a] = butter(2, ...
-            handles.filter_options(2)/(EEG.srate/2), 'low');
-    else
-        [filt_param_b, filt_param_a] = ...
-            butter(2,[handles.filter_options(1)/(EEG.srate/2),...
-            handles.filter_options(2)/(EEG.srate/2)]);
+        % determine filtering parameters
+        % check for empty boxes for one-sided filters
+        if isnan(handles.filter_options(n, 2))
+            
+            [filt_param_b, filt_param_a] = butter(2, ...
+                handles.filter_options(n, 1) / (EEG.srate / 2), 'high');
+            
+        elseif isnan(handles.filter_options(1))
+            
+            [filt_param_b, filt_param_a] = butter(2, ...
+                handles.filter_options(n, 2) / (EEG.srate / 2), 'low');
+        else
+            [filt_param_b, filt_param_a] = ...
+                butter(2,[handles.filter_options(n, 1)/(EEG.srate/2),...
+                handles.filter_options(n, 2) / (EEG.srate / 2)]);
+        end
+        
+        % apply the filter to the data window
+        data_to_plot(channel_ind, :) = single(filtfilt(filt_param_b, filt_param_a, ...
+            double(data_to_plot(channel_ind, :)'))');
     end
-    
-    % apply the filter to the data window
-    data_to_plot = single(filtfilt(filt_param_b, filt_param_a, double(data_to_plot'))');
 end
 
 
@@ -532,8 +545,12 @@ end
 % plot the channel data
 % ^^^^^^^^^^^^^^^^^^^^^
 if flag_replot
-    % delete existing handles
-    if isfield(handles, 'plot_eeg'); delete(handles.plot_eeg); end
+    
+    % delete existing handles and lines
+    if isfield(handles, 'plot_eeg') 
+        delete(handles.plot_eeg); 
+        handles = rmfield(handles, 'plot_eeg');
+    end
     
     % plot lines
     handles.plot_eeg = line(time, data_to_plot,...
@@ -555,7 +572,10 @@ end
 % plot the labels in their own boxes
 % ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 % delete existing handles
-if isfield(handles, 'labels'); delete(handles.labels); end
+if isfield(handles, 'labels')
+    delete(handles.labels); 
+    handles = rmfield(handles, 'labels');
+end
 handles.labels = zeros(handles.n_disp_chans, 1);
 % loop for each label
 for n = 1 : handles.n_disp_chans
@@ -732,6 +752,7 @@ if ~isfield(EEG, 'csc_montage')
     EEG.csc_montage.label_channels = cell(EEG.nbchan, 1);
     for n = 1 : EEG.nbchan
         EEG.csc_montage.label_channels(n) = {num2str(n)};
+        EEG.csc_montage.channel_type(n) = {'EEG'};
     end
     EEG.csc_montage.channels(:, 1) = 1:EEG.nbchan;
     EEG.csc_montage.channels(:, 2) = EEG.nbchan;
@@ -750,6 +771,21 @@ if ~isfield(EEG.csc_montage, 'scaling')
     EEG.csc_montage.scaling(:, 1) = ones(EEG.nbchan, 1);
 end
 
+% check for channel type for backwards compatibility with old montages
+if ~isfield(EEG.csc_montage, 'channel_type')
+    for n = 1 : length(EEG.csc_montage.label_channels)
+        EEG.csc_montage.channel_type{n, 1} = 'EEG';
+    end
+end
+
+% recalculate channel types
+handles.channel_types = ones(length(EEG.csc_montage.channel_type), 1);
+channel_types = {'EEG', 'EMG', 'EOG', 'Other'};
+for n = 1 : 4
+    type_ind = cellfun(@(x) strcmp(x, channel_types{n}), EEG.csc_montage.channel_type);
+    handles.channel_types(type_ind) = n;
+end
+             
 % check that the montage has enough channels to display
 if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
     handles.n_disp_chans = length(EEG.csc_montage.label_channels);
@@ -859,7 +895,7 @@ handles.fig = figure(...
 handles.table = uitable(...
     'parent',       handles.fig             ,...
     'units',        'normalized'            ,...
-    'position',     [0.05, 0.25, 0.9, 0.7]   ,...
+    'position',     [0.05, 0.30, 0.9, 0.65]   ,...
     'backgroundcolor', handles.csc_plotter.colorscheme.bg_col_2 ,...
     'foregroundcolor', handles.csc_plotter.colorscheme.fg_col_1 ,...
     'columnName',   {'label','time', 'type'});
@@ -870,7 +906,7 @@ handles.clear_button = uicontrol(...
     'Style',    'pushbutton' ,...
     'String',   'clear event(s)' ,...
     'Units',    'normalized' ,...
-    'Position', [0.05 0.15 0.9 0.04],...
+    'Position', [0.05 0.20 0.9 0.04],...
     'FontName', 'Century Gothic' ,...
     'FontSize', 11,...
     'tooltipString', 'delete above selected events');
@@ -882,11 +918,11 @@ handles.import_button = uicontrol(...
     'Style',    'pushbutton' ,...
     'String',   'import events' ,...
     'Units',    'normalized' ,...
-    'Position', [0.05 0.10 0.9 0.04] ,...
+    'Position', [0.05 0.15 0.9 0.04] ,...
     'FontName', 'Century Gothic',...
     'FontSize', 11 ,...
     'tooltipString', 'import events' ,...
-    'enable', 'off');
+    'enable', 'on');
 set(handles.import_button, 'callback', {@pb_event_option, 'import'});
 
 % export to workspace
@@ -895,11 +931,23 @@ handles.export_button = uicontrol(...
     'Style',    'pushbutton',...
     'String',   'export to workspace',...
     'Units',    'normalized',...
-    'Position', [0.05 0.05 0.9 0.04],...
+    'Position', [0.05 0.10 0.9 0.04],...
     'FontName', 'Century Gothic',...
     'FontSize', 11,...
     'tooltipString', 'export to workspace');
 set(handles.export_button, 'callback', {@pb_event_option, 'export'});
+
+% export to file
+handles.save_button = uicontrol(...
+    'Parent',   handles.fig,...
+    'Style',    'pushbutton',...
+    'String',   'save to file',...
+    'Units',    'normalized',...
+    'Position', [0.05 0.05 0.9 0.04],...
+    'FontName', 'Century Gothic',...
+    'FontSize', 11,...
+    'tooltipString', 'export to file');
+set(handles.save_button, 'callback', {@pb_event_option, 'save'});
 
 % get the underlying java properties
 jscroll = findjobj(handles.table);
@@ -1193,12 +1241,39 @@ switch option
         fcn_redraw_events(handles.csc_plotter.fig, []);
         
     case 'import'
-        % TODO: import from workspace variable and EEG.event
+        % load an event file
+        [file_name, file_path] = uigetfile('*.mat');
+        loaded_event_file = load(fullfile(file_path, file_name));
+        
+        if isfield(loaded_event_file, 'event_data')
+            set(handles.table, 'data', loaded_event_file.event_data);
+            
+            % put the new table into the structure
+            % Get the EEG from the figure's appdata
+            EEG = getappdata(handles.csc_plotter.fig, 'EEG');
+            EEG.csc_event_data = loaded_event_file.event_data;
+            setappdata(handles.csc_plotter.fig, 'EEG', EEG);
+            
+            % re-draw the event window in main
+            fcn_redraw_events(handles.csc_plotter.fig, []);
+            
+        else
+            % TODO: event error message
+        end
         
     case 'export'
         % assign events to base workspace
         event_data = fcn_compute_events(handles.csc_plotter);
         assignin('base', 'event_data', event_data);
+        
+    case 'save'
+        % save the events as a file
+        event_data = fcn_compute_events(handles.csc_plotter);
+
+        % Ask where to put file...
+        [saveFile, savePath] = uiputfile('*.mat');
+        save(fullfile(savePath, saveFile), 'event_data', '-mat');
+        
 end
 
 
@@ -1731,6 +1806,79 @@ elseif any(strcmp(event.Modifier, {'control', 'alt'}))
     end    
 end
 
+function fcn_filter_settings(object, event)
+% get the original figure handles
+handles.csc_plotter = guidata(object);
+EEG = getappdata(handles.csc_plotter.fig, 'EEG');
+
+% make a window
+handles.fig = figure(...
+    'name',         'csc filter settings',...
+    'numberTitle',  'off',...
+    'color',        handles.csc_plotter.colorscheme.bg_col_1,...
+    'menuBar',      'none',...
+    'units',        'normalized',...
+    'outerPosition', [0.4 0.4 0.2 0.2]);
+
+% montage table
+handles.table = uitable(...
+    'parent',       handles.fig             ,...
+    'units',        'normalized'            ,...
+    'position',     [0.05, 0.30, 0.9, 0.65]   ,...
+    'backgroundcolor', handles.csc_plotter.colorscheme.bg_col_2 ,...
+    'foregroundcolor', handles.csc_plotter.colorscheme.fg_col_1 ,...
+    'columnEditable', [false, true, true, false], ...
+    'columnFormat', {'char', 'numeric', 'numeric', 'char'}, ...
+    'columnName',   {'type', 'high', 'low', 'color'});
+
+% set the data
+data = cell(4, 4);
+data(:, 1) = {'EEG', 'EMG', 'EOG', 'Other'};
+data(:, [2, 3]) = num2cell(handles.csc_plotter.filter_options);
+% TODO: make color options for individual channel types
+data(:, 4) = {'d'};
+set(handles.table, 'Data', data);
+
+% automatically adjust the column width using java handle
+jscroll = findjobj(handles.table);
+jtable  = jscroll.getViewport.getView;
+jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+
+% create the save button
+handles.apply_filters = uicontrol(...
+    'parent',       handles.fig,...
+    'style',        'push',...    
+    'string',       'apply',...
+    'foregroundColor', 'k',...
+    'units',        'normalized',...
+    'position',     [0.275 0.1 0.5 0.1],...
+    'fontName',     'Century Gothic',...
+    'fontWeight',   'bold',...   
+    'fontSize',     10);
+set(handles.apply_filters, 'callback', {@fcn_apply_filters});
+
+% save those handles
+guidata(handles.fig, handles);
+
+function fcn_apply_filters(object, event)
+% get filter figure handles
+handles = guidata(object);
+handles.csc_plotter = guidata(handles.csc_plotter.fig);
+
+% get relevant filter data
+data = get(handles.table, 'Data');
+filter_data = cell2mat(data(:, [2, 3]));
+
+% put in plotter figure handles
+handles.csc_plotter.filter_options = filter_data;
+
+% save those handles
+guidata(handles.fig, handles);
+guidata(handles.csc_plotter.fig, handles.csc_plotter);
+
+% update the plot
+update_main_plot(handles.csc_plotter.fig, 1);
+
 
 % Montage Functions
 % ^^^^^^^^^^^^^^^^^
@@ -1815,8 +1963,9 @@ handles.table = uitable(...
     'position',     [0.675, 0.1, 0.3, 0.8]  ,...
     'backgroundcolor', [0.1, 0.1, 0.1; 0.2, 0.2, 0.2],...
     'foregroundcolor', [0.9, 0.9, 0.9]      ,...
-    'columnName',   {'name','chan','ref', 'scale'},...
-    'columnEditable', [true, true, true, true]);
+    'columnName',   {'name','chan','ref', 'scale', 'type'},...
+    'columnFormat', {'char', 'numeric', 'numeric', 'numeric', {'EEG', 'EMG', 'EOG', 'Other'}}, ...
+    'columnEditable', [true, true, true, true, true]);
 
 % automatically adjust the column width using java handle
 jscroll = findjobj(handles.table);
@@ -1852,6 +2001,14 @@ handles.reference_list = uicontrol(     ...
     'selectionHighlight', 'off'         ,...
     'fontName',     'Century Gothic'    ,...
     'fontSize',     8);
+% if montage exists set to reference already chosen
+switch EEG.csc_montage.reference
+    case 'custom'
+        set(handles.reference_list, 'value', 2);
+    case 'average'
+        set(handles.reference_list, 'value', 3);
+end
+% set callback
 set(handles.reference_list, 'callback', {@fcn_montage_buttons, 'reference'});
 
 % create the buttons
@@ -1878,7 +2035,8 @@ handles.button_delete = uicontrol(...
     'FontWeight', 'bold',...   
     'FontSize', 10);
 set(handles.button_delete, 'callback', {@fcn_button_delete});
-
+guidata(handles.fig, handles);
+guidata(handles.csc_plotter.fig, handles.csc_plotter);
 handles.button_reset = uicontrol(...
     'Parent',   handles.fig,...
     'Style',    'push',...    
@@ -1909,6 +2067,7 @@ data = cell(length(EEG.csc_montage.label_channels), 3);
 data(:, 1) = deal(EEG.csc_montage.label_channels);
 data(:, [2,3]) = num2cell(EEG.csc_montage.channels);
 data(:, 4) = num2cell(EEG.csc_montage.scaling);
+data(:, 5) = deal(EEG.csc_montage.channel_type);
 
 % put the data into the table
 set(handles.table, 'data', data);
@@ -2075,6 +2234,7 @@ end
 EEG.csc_montage.label_channels = data(:,1);
 EEG.csc_montage.channels = cell2mat(data(:,[2,3]));
 EEG.csc_montage.scaling = cell2mat(data(:, 4));
+EEG.csc_montage.channel_type = data(:, 5);
 
 % compatibility with older matlab versions (handles dot notation).
 if verLessThan('matlab', '8.4')
@@ -2095,10 +2255,6 @@ end
 % Reset hidden channels
 handles.csc_plotter.hidden_chans = [];
 
-% update the slider to reflect new montage
-handles.csc_plotter.vertical_scroll.Value = -1;
-handles.csc_plotter.vertical_scroll.Min = -(EEG.nbchan - length(handles.csc_plotter.disp_chans));
-
 % change montage name
 % compatibility with older matlab versions (handles dot notation).
 tmp_list = get(handles.montage_list, 'string');
@@ -2108,6 +2264,14 @@ else
     EEG.csc_montage.name = tmp_list{get(handles.montage_list, 'Value')};
 end
     
+% recalculate channel type (faster plotting if calculated once here)
+handles.csc_plotter.channel_types = ones(length(EEG.csc_montage.channel_type), 1);
+channel_types = {'EEG', 'EMG', 'EOG', 'Other'};
+for n = 1 : 4
+    type_ind = cellfun(@(x) strcmp(x, channel_types{n}), EEG.csc_montage.channel_type);
+    handles.csc_plotter.channel_types(type_ind) = n;
+end
+
 % update the handle structures
 guidata(handles.fig, handles);
 guidata(handles.csc_plotter.fig, handles.csc_plotter);
@@ -2115,7 +2279,6 @@ setappdata(handles.csc_plotter.fig, 'EEG', EEG);
 
 % update the plot
 update_main_plot(handles.csc_plotter.fig);
-
 
 function fcn_montage_buttons(object, ~, event_type)
 % get the montage handles
@@ -2125,7 +2288,7 @@ switch event_type
     case 'add'
         % add a row of ones to the table 
         old_data = handles.table.Data;
-        new_row = {'', 1, 0, 1};
+        new_row = {'', 1, 0, 1, 'EEG'};
         set(handles.table, 'Data', [old_data; new_row]);
         
     case 'reset'
@@ -2141,6 +2304,7 @@ switch event_type
         [montage(:, 2)] = deal(num2cell(1 : EEG.nbchan)); % actual number
         montage(:, 3) = {EEG.nbchan}; % reference
         montage(:, 4) = {1}; % scaling
+        [montage(:, 5)] = deal({'EEG'});
         
         % assign to table
         set(handles.table, 'Data', montage);
@@ -2169,7 +2333,15 @@ EEG.csc_montage.name = montage_name;
 if ~isempty(montage_name) && ~strcmp(montage_name, 'original')
     montage = load(fullfile(montage_dir, montage_name), '-mat');
     if isfield(montage, 'data')
+               
+        % check for missing channel types
+        if size(montage.data, 2) < 5
+            montage.data(:, 5) = deal({'EEG'});
+        end
+
+        % set into the table
         set(handles.table, 'data', montage.data);
+
     else
         fprintf(1, 'Warning: could not find montage data in the file.\n');
     end
