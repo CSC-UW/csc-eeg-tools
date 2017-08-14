@@ -14,9 +14,6 @@ if ~isfield(EEG, 'bad_data')
    EEG.bad_data = false(1, EEG.pnts);   
 end
 
-% save the EEG to the figure
-setappdata(handles.fig, 'EEG', EEG);    
-
 % check for EEG.icaact
 if isempty(EEG.icaact)
     fprintf(1, 'recalculating EEG.icaact...\n')
@@ -27,6 +24,9 @@ if isempty(EEG.icaact)
         EEG.icaact = reshape(EEG.icaact, [size(EEG.icaweights, 1), EEG.pnts, EEG.trials]);
     end
 end
+
+% save the EEG to the figure
+setappdata(handles.fig, 'EEG', EEG);  
 
 % allocate the component list from scratch
 
@@ -309,7 +309,7 @@ handles.plots.spectra = ...
 % plot the topography %
 % ------------------- %
 handles.plots.topo = ...
-    csc_Topoplot(EEG.icawinv(:, no_comp), EEG.chanlocs(EEG.good_channels) ,...
+    csc_Topoplot(EEG.icawinv(EEG.good_channels, no_comp), EEG.chanlocs(EEG.good_channels) ,...
     'axes', handles.ax_topoplot ,...
     'plotChannels', false);
 
@@ -360,8 +360,11 @@ else
 end
 
 % re-set the image of all trials %
+trial_images = squeeze(EEG.icaact(current_component, :, :))';
 set(handles.plots.image, ...
-    'cData', squeeze(EEG.icaact(current_component, :, :))');
+    'cData', trial_images);
+% re-adjust the axes limits to match image percentiles
+set(handles.ax_erp_image, 'CLim', [prctile(trial_images(:), 2), prctile(trial_images(:), 98)]);
 
 % re-set the evoked potential %
 data_to_plot = mean(EEG.icaact(current_component, : , :), 3)';
@@ -380,10 +383,14 @@ set(handles.plots.spectra, ...
 % ------------------- %
 % plot the topography %
 % ------------------- %
+current_topo_data = EEG.icawinv(EEG.good_channels, current_component);
 handles.plots.topo = ...
-    csc_Topoplot(EEG.icawinv(:, current_component), EEG.chanlocs(EEG.good_channels),...
+    csc_Topoplot(current_topo_data, EEG.chanlocs(EEG.good_channels),...
     'axes', handles.ax_topoplot ,...
     'plotChannels', false);
+
+% adjust the color limits
+set(handles.plots.topo.CurrentAxes, 'CLim', [min(current_topo_data), max(current_topo_data)]);
 
 guidata(handles.fig, handles)
 

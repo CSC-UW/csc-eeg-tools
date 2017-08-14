@@ -25,22 +25,19 @@ switch method
         % calculate the fft
         % ~~~~~~~~~~~~~~~~~
         [fft_all, freq_range] = csc_average_reference_and_FFT(EEG, options);
-        
-        % concatenate the ffts
-            %TODO: have the bands of interest as options
-        fft_bands = csc_calculate_freq_bands(fft_all, freq_range, options);
-        
+               
         % run the artifact detection
         % ~~~~~~~~~~~~~~~~~~~~~~~~~~
         % calculate the bad epochs using thresholding of the band of
         % interest (2nd parameters)
-        bad_epochs = csc_artifact_detection_fft(fft_bands, [1, 5], 'semi_automatic');
+        % TODO: bands of interest should be an option as well
+        EEG.bad_epochs = csc_artifact_detection_fft(fft_all, freq_range, options);
         
-        % calculate the bad epochs in time
-        bad_epochs_time = (find(bad_epochs) * options.epoch_length) - options.epoch_length;
-        
-        % rearrange the time stamps into regions
-        EEG.bad_regions = [bad_epochs_time', bad_epochs_time' + options.epoch_length];
+%         % calculate the bad epochs in time
+%         bad_epochs_time = (find(bad_epochs) * options.epoch_length) - options.epoch_length;
+%         
+%         % rearrange the time stamps into regions
+%         EEG.bad_regions = [bad_epochs_time', bad_epochs_time' + options.epoch_length];
         
     otherwise
         fprintf(1, 'Error: unrecognised option call: %s', method);
@@ -58,12 +55,15 @@ saveName = [EEG.filename(1:end-4), '_fftANok.mat'];
 varargin = varargin{1};
 
 options = struct(...
-    'ave_ref',          0       ,...
-    'bad_channels',     []      ,...
-    'save_file',        0       ,...
-    'save_name',        saveName,...
-    'epoch_length',     6       ,...
-    'freq_limit',       40     );
+    'ave_ref', 0, ...
+    'bad_channels', [], ...
+    'bands_of_interest', [1, 5], ...
+    'default_percentile', 99, ...
+    'method', 'semi_automatic', ...
+    'save_file',  0, ...
+    'save_name', saveName, ...
+    'epoch_length', 6, ...
+    'freq_limit', 40 );
 
 % read the acceptable names
 optionNames = fieldnames(options);
