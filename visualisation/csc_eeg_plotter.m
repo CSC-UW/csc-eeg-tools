@@ -399,7 +399,7 @@ else % normal plotting of activity
                 
                 % recalculate data based on projections
                 projection_data = EEG.icawinv(:, EEG.good_components) ...
-                    * EEG.icaact(EEG.good_components, range);
+                    * icaData(EEG.good_components, range);
                 
                 % subselect displayed channels
                 data_to_plot = projection_data(...
