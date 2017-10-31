@@ -3,6 +3,7 @@
 function EEG = mff_convert_to_EEGLAB(fileName, save_name, recording_system)
 
 FLAG_TO_STRUCT = true;
+FLAG_DOWNSAMPLE = false;
 
 % if the filename is not specified open a user dialog
 if nargin < 1
@@ -53,22 +54,57 @@ EEG.chanlocs(257:end)=[];
 % either write directly to file or to struct
 if FLAG_TO_STRUCT
     
-    % calculate total size and pre-allocate
-    EEG.data = zeros(EEG.nbchan, mffData.signal_binaries(recording_system).channels.num_samples(1), 'single');
-    
     % open a progress bar
     waitHandle = waitbar(0,'Please wait...', 'Name', 'Importing Channels');
     
-    % fill the EEG.data
-    for current_channel = 1 : EEG.nbchan
+    if ~FLAG_DOWNSAMPLE
+        % calculate total size and pre-allocate
+        EEG.data = zeros(EEG.nbchan, mffData.signal_binaries(recording_system).channels.num_samples(1), 'single');
         
-        % update the waitbar
-        waitbar(current_channel/EEG.nbchan, waitHandle, sprintf('Channel %d of %d', current_channel, EEG.nbchan))
+        % fill the EEG.data
+        for current_channel = 1 : EEG.nbchan
+            
+            % update the waitbar
+            waitbar(current_channel/EEG.nbchan, waitHandle, sprintf('Channel %d of %d', current_channel, EEG.nbchan))
+            
+            % get all the data
+            temp_data = mff_import_signal_binary(mffData.signal_binaries(recording_system), current_channel, 'all');
+            EEG.data(current_channel, :) = temp_data.samples;
+            
+        end
+        
+    else
                
-        % get all the data
-        temp_data = mff_import_signal_binary(mffData.signal_binaries(recording_system), current_channel, 'all');
-        EEG.data(current_channel, :) = temp_data.samples;
+        % get the first channel
+        temp_data = mff_import_signal_binary(mffData.signal_binaries(recording_system), 1, 'all');
         
+        % NOTE: decimate function takes care of filtering
+%         % design filter (cheby 1 _ 10th order _ nyquist)
+%         filter_design = designfilt('lowpassiir', 'FilterOrder', 10, ...
+%             'PassbandFrequency', temp_data.sampling_rate / 4, 'PassbandRipple', 1, 'SampleRate', temp_data.sampling_rate);
+%         
+%         % filter the channel
+%         temp_data.samples = filtfilt(filter_design, double(temp_data.samples));
+        
+        % downsample the channel
+        temp_data.samples = single(decimate(double(temp_data.samples), 2));
+        
+        % pre-allocate EEG to remaining size
+        EEG.data = zeros(EEG.nbchan, length(temp_data.samples), 'single');
+        EEG.data(1, :) = temp_data.samples;
+        
+        % loop for rest of channels
+        for current_channel = 2 : EEG.nbchan
+            
+            % update the waitbar
+            waitbar(current_channel/EEG.nbchan, waitHandle, sprintf('Channel %d of %d', current_channel, EEG.nbchan))
+            
+            % get all the data
+            temp_data = mff_import_signal_binary(mffData.signal_binaries(recording_system), current_channel, 'all');
+            temp_data.samples = single(decimate(double(temp_data.samples), 2));
+            EEG.data(current_channel, :) = temp_data.samples;
+            
+        end
     end
     
     % delete the progress bar

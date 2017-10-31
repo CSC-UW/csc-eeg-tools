@@ -1,7 +1,19 @@
-function channel_thresholds = csc_artifact_rejection_fft_gui(fft_bands, thresholds)
+function [channel_thresholds, fft_bands] = csc_artifact_rejection_fft_gui(fft_all, freq_range, options)
 
 % set some default options
-options.ylimitmax = 0;
+options.ylimitmax = 1;
+
+
+% calculate the intial bands
+% concatenate the ffts
+fft_bands = csc_calculate_freq_bands(fft_all, freq_range, options);
+
+% only select the bands of interest from the fft
+fft_bands = fft_bands(:,:, options.bands_of_interest);
+
+% calculate the default percentiles over epochs (dim=2) of each band
+thresholds = squeeze(prctile(fft_bands, options.default_percentile, 2));
+
 
 % create the figure
 handles.fig = figure(...
@@ -14,6 +26,8 @@ handles.fig = figure(...
 
 set(handles.fig,...
     'KeyPressFcn', {@cb_KeyPressed});
+set(handles.fig, ...
+    'CloseRequestFcn', {@pb_accept});
 
 
 % slider for channel navigation
@@ -52,10 +66,10 @@ band_minimum = squeeze(min(min(fft_bands, [], 1), [], 2));
 band_maximum = squeeze(max(max(fft_bands, [], 1), [], 2));
 
 % draw axes
-for a = 1:no_bands
+for a = 1 : no_bands
     handles.axes(a) = axes(...
         'parent',       handles.fig             ,...
-        'position',     [axes_pos_x(a) 0.1, axes_width, 0.75]   ,...
+        'position',     [axes_pos_x(a) 0.35, axes_width, 0.5]   ,...
         'nextPlot',     'add'                   ,...
         'color',        [0.2, 0.2, 0.2]         ,...
         'xcolor',       [0.9, 0.9, 0.9]         ,...
@@ -66,7 +80,7 @@ for a = 1:no_bands
     % set the y limits of the axes to be minimal and maximal possible
     if options.ylimitmax
         set(handles.axes(a),...
-            'ylim',         [band_minimum(a), band_maximum(a)]);
+            'ylim',         [0, band_maximum(a)]);
     end
     
     % set the callback
@@ -76,13 +90,36 @@ end
 % set the xlimits of the axes
 set(handles.axes, 'xlim', [0, size(fft_bands, 2)]);
 
-% push button to finish editing thresholds
+% draw spectral axes
+handles.spectral_ax = axes(...
+        'parent',       handles.fig             ,...
+        'position',     [0.075, 0.05, 0.85, 0.2]   ,...
+        'nextPlot',     'add'                   ,...
+        'color',        [0.2, 0.2, 0.2]         ,...
+        'xcolor',       [0.9, 0.9, 0.9]         ,...
+        'ycolor',       [0.9, 0.9, 0.9]         ,...
+        'fontName',     'Century Gothic'        ,...
+        'fontSize',     8                       );
+
+
+% push button to reset channel threshold
 handles.pb_accept = uicontrol(...
     'Parent',   handles.fig,...   
     'Style',    'pushbutton',...    
-    'String',   'accept',...
+    'String',   'reset',...
     'Units',    'normalized',...
-    'Position', [0.8 .875 0.05 0.05],...
+    'Position', [0.1 .875 0.1 0.05],...
+    'FontName', 'Century Gothic',...
+    'FontSize', 11);
+set(handles.pb_accept, 'Callback', {@pb_accept})
+
+% push button to finish editing thresholds
+handles.pb_accept = uicontrol(...fft_bands
+    'Parent',   handles.fig,...   
+    'Style',    'pushbutton',...    
+    'String',   'done',...
+    'Units',    'normalized',...
+    'Position', [0.8 .875 0.1 0.05],...
     'FontName', 'Century Gothic',...
     'FontSize', 11);
 set(handles.pb_accept, 'Callback', {@pb_accept})
@@ -90,6 +127,8 @@ set(handles.pb_accept, 'Callback', {@pb_accept})
 
 % set the data into the figure structure
 guidata(handles.fig, handles);
+setappdata(handles.fig, 'fft_all', fft_all);
+setappdata(handles.fig, 'freq_range', freq_range);
 setappdata(handles.fig, 'fft_bands', fft_bands);
 setappdata(handles.fig, 'thresholds', thresholds);
 
@@ -101,6 +140,7 @@ uiwait(handles.fig);
 
 % once uiwait resumes get the most current thresholds
 channel_thresholds = getappdata(handles.fig, 'thresholds');
+fft_bands = getappdata(handles.fig, 'fft_bands');
 
 % and delete the figure
 delete (handles.fig);
@@ -115,6 +155,8 @@ handles = guidata(object);
 % get the data
 fft_bands = getappdata(handles.fig, 'fft_bands');
 thresholds = getappdata(handles.fig, 'thresholds');
+fft_all = getappdata(handles.fig, 'fft_all');
+freq_range = getappdata(handles.fig, 'freq_range');
 
 % always plot the first channel in the initial plot
 nCh = 1;
@@ -122,7 +164,7 @@ nCh = 1;
 % loop plot the channel for each band on the appropriate axes
 for b = 1:size(fft_bands, 3);
     % plot the data
-    handles.plot(b) = plot(fft_bands(nCh,:,b),...
+    handles.plot(b) = plot(fft_bands(nCh,:,b),...channel_thresholds
         'parent',   handles.axes(b), ...
         'color',    [0.8, 0.8, 0.8]);
    
@@ -147,6 +189,29 @@ set(handles.labels,...
     'interpreter', 'latex');
 
 
+% calculate the original spectrum
+original_spectra = sqrt(mean(fft_all(nCh, :, :) .^2 , 3));
+
+% calculate the "thresholded" spectrum
+currently_good_epochs = ...
+    fft_bands(nCh, :, 1) < thresholds(nCh, 1) | ...
+    fft_bands(nCh, :, 2) < thresholds(nCh, 2);
+thresholded_spectra = sqrt(mean(fft_all(nCh, :, currently_good_epochs) .^2 , 3));
+
+% plot the overall spectrum
+flag_log = true;
+if flag_log
+    handles.original_spectra = plot(freq_range, log(original_spectra), ...
+        'parent', handles.spectral_ax, ...
+        'color', [0.4, 0.4, 0.4], ...
+        'lineWidth', 6);
+    
+    handles.thresholded_spectra = plot(freq_range, log(thresholded_spectra), ...
+        'parent', handles.spectral_ax, ...
+        'color', [0.8, 0.8, 0.8], ...
+        'lineWidth', 1);
+end
+
 % set the handles structure
 guidata(handles.fig, handles);
 
@@ -165,7 +230,7 @@ thresholds = getappdata(handles.fig, 'thresholds');
 nCh = handles.jslider.getValue();
 
 % loop for replotting
-for b = 1:size(fft_bands, 3);
+for b = 1:size(fft_bands, 3)
 
    set(handles.plot(b),...
        'ydata', fft_bands(nCh,:,b));
@@ -176,6 +241,36 @@ end
 
 % update the channel indicator
 set(handles.channel_indicator, 'string', num2str(nCh));
+
+function fcn_update_spectra(object)
+% fast update of the thresholded ydata in the spectrum
+
+% get the GUI figure handles
+handles = guidata(object);
+
+% get the data
+fft_bands = getappdata(handles.fig, 'fft_bands');
+thresholds = getappdata(handles.fig, 'thresholds');
+fft_all = getappdata(handles.fig, 'fft_all');
+
+% get the current channel
+nCh = handles.jslider.getValue();
+
+% calculate the original spectrum
+original_spectra = sqrt(mean(fft_all(nCh, :, :) .^2 , 3));
+
+% calculate the "thresholded" spectrum
+currently_good_epochs = not(...
+    fft_bands(nCh, :, 1) > thresholds(nCh, 1) | ...
+    fft_bands(nCh, :, 2) > thresholds(nCh, 2));
+thresholded_spectra = sqrt(mean(fft_all(nCh, :, currently_good_epochs) .^2 , 3));
+
+% replace the spectrum
+flag_log = true;
+if flag_log   
+    set(handles.original_spectra, 'ydata', log(original_spectra));
+    set(handles.thresholded_spectra, 'ydata', log(thresholded_spectra));
+end
 
 
 function cb_KeyPressed(object, eventdata)
@@ -195,7 +290,9 @@ switch eventdata.Key
             handles.jslider.setValue(nCh-1);
         end
         
+        % update the plots
         fcn_update_plots(object);
+        fcn_update_spectra(object)
 
         
     case 'rightarrow'
@@ -204,14 +301,16 @@ switch eventdata.Key
             handles.jslider.setValue(nCh+1);
         end
 
+        % update the plots
         fcn_update_plots(object);
+        fcn_update_spectra(object)
 
     case 'uparrow'
         current_limits = get(handles.axes, 'ylim');
 
         % set each axes individually
         for n = 1:length(current_limits) 
-            set(handles.axes(n), 'ylim', current_limits{n}/1.3);
+            set(handles.axes(n), 'ylim', [0, current_limits{n}(2) / 1.3]);
         end
         
     case 'downarrow'
@@ -219,7 +318,7 @@ switch eventdata.Key
 
         % set each axes individually
         for n = 1:length(current_limits) 
-            set(handles.axes(n), 'ylim', current_limits{n}*1.3);
+            set(handles.axes(n), 'ylim', [0, current_limits{n}(2) * 1.3]);
         end
 end
 
@@ -251,6 +350,7 @@ setappdata(handles.fig, 'thresholds', thresholds);
 
 % update the axes
 fcn_update_plots(object);
+fcn_update_spectra(object);
 
 
 function pb_accept(~, ~)
