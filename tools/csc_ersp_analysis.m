@@ -1,5 +1,13 @@
-function [wavelet_series, freq_range, trial_wavelet] = csc_ersp_analysis(EEG)
+function [wavelet_series, freq_range, trial_wavelet] = csc_ersp_analysis(EEG, flag_plot)
 % function similar to newtimef with matlab's own continuous wavelet transform
+
+% returns the event-related spectral perturbation in decible (10 * log10), after
+% mean normalisation, and baseline correction, squared/square root averaging of
+% individual trials
+
+if nargin < 2
+    flag_plot = false;
+end
 
 % remove bad trials
 if isfield (EEG, 'good_trials')
@@ -43,7 +51,7 @@ for nCh = 1 : EEG.nbchan
         ./repmat(mean_wavelet_power, [1, size(wavelet_power, 2), 1] );
     
     % calculate the trial by trial baseline
-    trial_baseline = mean(wavelet_power(:, baseline_period, :), 2);
+    trial_baseline = mean(norm_wavelet_power(:, baseline_period, :), 2);
     
     % calculate overall baseline mean
     % NOTE: baseline taken from averaged time series
@@ -61,10 +69,11 @@ for nCh = 1 : EEG.nbchan
     corrected_series = bsxfun(@rdivide, norm_wavelet_power, overall_baseline);
       
     % get the absolute mean
-    wavelet_series(:, nCh, :) = 10 * log10(sqrt(mean(abs(corrected_series) .^ 2, 3)));
+    wavelet_series(:, nCh, :) = 10 * log10(sqrt(mean(corrected_series .^ 2, 3)));
     
 end
     
+% contour plot of example channel's results.
 if flag_plot
    
     selected_channel = 1;
