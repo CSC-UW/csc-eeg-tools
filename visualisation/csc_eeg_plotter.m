@@ -1,27 +1,27 @@
 function EEG = csc_eeg_plotter(varargin)
+% visualisation and event editor for time series data
+% Author: Armand Mensen
 
-%TODO: Main page 
-        %Scale - green lines across one of the channels
-        %left side epoch length/scale boxes
-        %top center box stating what is in the epoch (much like sleep scoring)
+% TODO:
+% Fix ugly default setting style (e.g. handles.options...)    
 
-%TODO: Montage
-        %Green line in front of headset
-        %headset electrodes smaller due to poor resolution on my computer
-       
-% TODO: Fix this ugly default setting style (e.g. handles.options...)    
 % declare defaults
-EPOCH_LENGTH = 30;
-FILTER_OPTIONS = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bandpass
+handles.filter_options = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bands
+handles.epoch_length = 30; % default viewing window
 handles.n_disp_chans = 12; % number of initial channels to display
 handles.v_grid_spacing = 1; % vertical grid default spacing (s)
 handles.h_grid_spacing = 75; % horizontal grid default spacing (uV)
 handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
-handles.plotICA = false; % plot components by default?
+handles.plotICA = false; % plot components by default
 handles.negative_up = false; % negative up by default (for clinicians)
 handles.number_of_event_types = 6; % how many event types do you want
+
+% sleep scoring options
 handles.scoring_mode = false; % sleep scoring off by default
+handles.scoring_window = handles.epoch_length; % how far window scrolls
+handles.scoring_offset = 0; % where (in window) to place event marker
+
 handles.component_projection = false; % viewing the difference between the data and remaining ica component projections
 
 % define the default colorscheme to use
@@ -33,7 +33,7 @@ handles.colorscheme = struct(...
     'bg_col_2',     [0.2, 0.2, 0.2] , ...
     'bg_col_3',     [0.15, 0.15, 0.15] );
 
-% Set display channels
+% Set initial display channels
 handles.disp_chans = [1 : handles.n_disp_chans];
 
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
@@ -85,8 +85,6 @@ handles.name_ax = axes(...
     'position',     [0 0.2, 0.1, 0.75]   ,...
     'visible',      'off');
 
-handles.filter_options = FILTER_OPTIONS;
-handles.epoch_length = EPOCH_LENGTH;
 
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1400,7 +1398,7 @@ switch type
     case 'vgrid_spacing'
         
         % display dialogue box
-        answer = inputdlg({'grid spacing (uV)'} , ...
+        answer = inputdlg({'grid spacing (s)'} , ...
             '', 1, {num2str( handles.v_grid_spacing )});
         
         % check for cancelled window
@@ -1747,13 +1745,26 @@ if isempty(event.Modifier)
                         current_point = handles.main_ax.XLim(1);
                     end
                     
-                    % set the appropriate marker at the start of the window
-                    cb_event_selection(object, [], str2double(event.Character), current_point);
+                    % check for existing event
+                    event_data = fcn_compute_events(handles, []);
+                    
+                    if any([event_data{:, 2}] == current_point)
+                        % replace that event with new label
+                        current_handle;
+                        
+                    else
+                        % new event
+                        % set the appropriate marker at the start of the window
+                        cb_event_selection(object, [],...
+                            str2double(event.Character), ...
+                            current_point + handles.scoring_offset);
+                    end
 
-                    % go to the next page
-                    new_event.Modifier = [];
-                    new_event.Key = 'rightarrow';
-                    cb_key_pressed(object, new_event);
+                    % go to next window
+                    set(handles.cPoint, 'value', ...
+                        floor([current_point + handles.scoring_window] * EEG.srate));
+                    
+                    fcn_change_time(object, [])
                 end
             end
     end
@@ -1771,13 +1782,15 @@ elseif any(strcmp(event.Modifier, {'control', 'alt'}))
         case 'leftarrow'
             % move a little to the left
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - handles.epoch_length/5 * EEG.srate);
+                get(handles.cPoint, 'Value') ...
+                - handles.epoch_length/3 * EEG.srate);
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move a little to the right
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + handles.epoch_length/5 * EEG.srate);
+                get(handles.cPoint, 'Value') ...
+                + handles.epoch_length/3 * EEG.srate);
             fcn_change_time(object, [])
             
         case 'pageup'
