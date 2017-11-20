@@ -1,27 +1,27 @@
 function EEG = csc_eeg_plotter(varargin)
+% visualisation and event editor for time series data
+% Author: Armand Mensen
 
-%TODO: Main page 
-        %Scale - green lines across one of the channels
-        %left side epoch length/scale boxes
-        %top center box stating what is in the epoch (much like sleep scoring)
+% TODO:
+% Fix ugly default setting style (e.g. handles.options...)    
 
-%TODO: Montage
-        %Green line in front of headset
-        %headset electrodes smaller due to poor resolution on my computer
-       
-% TODO: Fix this ugly default setting style (e.g. handles.options...)    
 % declare defaults
-EPOCH_LENGTH = 30;
-FILTER_OPTIONS = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bandpass
+handles.filter_options = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bands
+handles.epoch_length = 30; % default viewing window
 handles.n_disp_chans = 12; % number of initial channels to display
 handles.v_grid_spacing = 1; % vertical grid default spacing (s)
 handles.h_grid_spacing = 75; % horizontal grid default spacing (uV)
 handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
-handles.plotICA = false; % plot components by default?
+handles.plotICA = false; % plot components by default
 handles.negative_up = false; % negative up by default (for clinicians)
 handles.number_of_event_types = 6; % how many event types do you want
+
+% sleep scoring options
 handles.scoring_mode = false; % sleep scoring off by default
+handles.scoring_window = handles.epoch_length; % how far window scrolls
+handles.scoring_offset = 0; % where (in window) to place event marker
+
 handles.component_projection = false; % viewing the difference between the data and remaining ica component projections
 
 % define the default colorscheme to use
@@ -33,7 +33,7 @@ handles.colorscheme = struct(...
     'bg_col_2',     [0.2, 0.2, 0.2] , ...
     'bg_col_3',     [0.15, 0.15, 0.15] );
 
-% Set display channels
+% Set initial display channels
 handles.disp_chans = [1 : handles.n_disp_chans];
 
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
@@ -85,8 +85,15 @@ handles.name_ax = axes(...
     'position',     [0 0.2, 0.1, 0.75]   ,...
     'visible',      'off');
 
-handles.filter_options = FILTER_OPTIONS;
-handles.epoch_length = EPOCH_LENGTH;
+% invisible axis for lower event labels
+% NOTE: otherwise constantly have to change ydata with each axes change
+handles.ax_lower_event = axes(...
+    'parent',       handles.fig, ...
+    'position',     [0.025 0.2, 0.95, 0.1], ...
+    'nextPlot',     'add', ...
+    'ylim',         [0, 1], ...
+    'visible',      'off');
+
 
 % create the uicontextmenu for the main axes
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -206,7 +213,6 @@ set(handles.fig,...
 
 % put update axes function handles in handles
 handles.update_axes = @update_main_plot;
-
 
 % update the figure handles
 guidata(handles.fig, handles)
@@ -485,6 +491,7 @@ set([handles.main_ax, handles.name_ax],...
 % calculate the time in seconds
 time = range/EEG.srate;
 set(handles.main_ax, 'xlim', [time(1), time(end)]);
+set(handles.ax_lower_event, 'xlim', [time(1), time(end)]);
 
 % set main axis tick labels
 if ~verLessThan('matlab', '8.4')
@@ -571,25 +578,27 @@ end
 
 % plot the labels in their own boxes
 % ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-% delete existing handles
-if isfield(handles, 'labels')
-    delete(handles.labels); 
-    handles = rmfield(handles, 'labels');
-end
-handles.labels = zeros(handles.n_disp_chans, 1);
-% loop for each label
-for n = 1 : handles.n_disp_chans
-  chn = handles.disp_chans(n);
-  handles.labels(n) = ...
-        text(0.25, toAdd(n, 1) + scale / 5, EEG.csc_montage.label_channels{chn},...
-        'parent', handles.name_ax,...
-        'fontsize',   12,...
-        'fontweight', 'bold',...
-        'color', handles.colorscheme.fg_col_2,...
-        'backgroundcolor', handles.colorscheme.bg_col_2,...
-        'horizontalAlignment', 'center',...
-        'userdata', 1, ...
-        'buttondownfcn', {@fcn_toggle_channel});
+if flag_replot
+    % delete existing handles
+    if isfield(handles, 'labels')
+        delete(handles.labels);
+        handles = rmfield(handles, 'labels');
+    end
+    handles.labels = zeros(handles.n_disp_chans, 1);
+    % loop for each label
+    for n = 1 : handles.n_disp_chans
+        chn = handles.disp_chans(n);
+        handles.labels(n) = ...
+            text(0.25, toAdd(n, 1) + scale / 5, EEG.csc_montage.label_channels{chn},...
+            'parent', handles.name_ax,...
+            'fontsize',   12,...
+            'fontweight', 'bold',...
+            'color', handles.colorscheme.fg_col_2,...
+            'backgroundcolor', handles.colorscheme.bg_col_2,...
+            'horizontalAlignment', 'center',...
+            'userdata', 1, ...
+            'buttondownfcn', {@fcn_toggle_channel});
+    end
 end
                     
 % change the x limits of the indicator plot
@@ -981,37 +990,27 @@ function event_data = fcn_compute_events(handles, ~)
 events = handles.events;
 
 % calculate the number of events
-no_events = cellfun(@(x) size(x,1), events);
+no_events = size(events, 1);
+
+% check for no events
+if no_events == 0
+    event_data = [];
+    return
+end
 
 % pre-allocate the event data
 event_data = cell(sum(no_events), 3);
 
-% loop for each event type
-for type = 1:length(no_events)
-    % skip event type if there are no events
-    if isempty(events{type})
-        continue;
-    end
-    
-    % calculate the rows to be inserted
-    % TODO: range calculation breaks for multiple event types
-    range = sum(no_events(1:type - 1)) + 1 : sum(no_events(1:type));
-    
-    % deal the event type into the event_data
-    event_data(range, 1) = {get(handles.selection.item(type), 'label')};
-    
-    % return the xdata from the handles
-    % check for single event
-    if numel(range) < 2
-        event_data(range, 2) = {get(events{type}(:,1), 'xdata')};
-    else
-        event_data(range, 2) = get(events{type}(:,1), 'xdata');
-    end
-    
-    % add the event type number in case labels are changed
-    event_data(range, 3) = {type};
-    
-end
+% insert latencies
+event_data(:, 2) = get(events(:,1), 'xdata');
+
+% insert type
+event_data(:, 3) = get(events(:,1), 'userData');
+
+% insert event labels
+% NOTE: no one ever changes the event labels from default so this might be deletable
+all_labels = get(handles.selection.item, 'label');
+event_data(:, 1) = {all_labels{[event_data{:, 3}]}};
 
 % sort the events by latency
 [~, sort_ind] = sort([event_data{:, 2}]);
@@ -1064,7 +1063,7 @@ event_colors = get(handles.main_ax, 'ColorOrder');
 
 % check if its the first item
 if ~isfield(handles, 'events')
-   handles.events = cell(length(handles.selection.item), 1);
+   handles.events = [];
 end
 
 % check if event latency is pre-specified
@@ -1078,18 +1077,18 @@ x = current_point(1);
 y = get(handles.main_ax, 'ylim');
 
 % draw bottom triangle
-handles.events{event_type}(end+1, 1) = plot(x, y(1),...
+handles.events(end+1, 1) = plot(x, 0,...
     'lineStyle', 'none',...
     'marker', '^',...
     'markerSize', 20,...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
     'markerFaceColor', event_colors(event_type, :),...
     'userData', event_type,...
-    'parent', handles.main_ax,...
+    'parent', handles.ax_lower_event,...
     'buttonDownFcn', {@bdf_delete_event});
 
 % draw top triangle
-handles.events{event_type}(end, 2) = plot(x, y(2),...
+handles.events(end, 2) = plot(x, y(2),...
     'lineStyle', 'none',...
     'marker', 'v',...
     'markerSize', 20,...
@@ -1104,7 +1103,7 @@ handles.events{event_type}(end, 2) = plot(x, y(2),...
 % translate the current x point into the event axes
 sample_point = floor(x * EEG.srate);
 
-handles.events{event_type}(end, 3) = line([sample_point, sample_point], ...
+handles.events(end, 3) = line([sample_point, sample_point], ...
     [event_type - 1, event_type], ...
     'color', event_colors(event_type, :),...
     'parent', handles.spike_ax,...
@@ -1118,20 +1117,14 @@ function bdf_delete_event(object, ~)
 % get the handles
 handles = guidata(object);
 
-% calculate the event number
-event_type = get(object, 'userData');
-event_number = mod(find(object == handles.events{event_type}), size(handles.events{event_type}, 1));
-
-% check for event 0, which is really the last event
-if event_number == 0
-    event_number = size(handles.events{event_type}, 1);
-end
+% calculate the event number (which row is the object handle in)
+event_number = any(object == handles.events, 2);
 
 % erase the object from the main and spike axes
-delete(handles.events{event_type}(event_number, :));
+delete(handles.events(event_number, :));
 
 % erase the event from the list
-handles.events{event_type}(event_number, :) = [];
+handles.events(event_number, :) = [];
 
 % update the GUI handles
 guidata(handles.fig, handles)
@@ -1147,12 +1140,10 @@ EEG = getappdata(handles.fig, 'EEG');
 
 % check for current events and delete their handles
 if isfield(handles, 'events')
-    for n = 1 : handles.number_of_event_types
-        % delete the handle
-        delete(handles.events{n});
-    end
+    % delete all the event handles
+    delete(handles.events);
     % reset handle structure structure
-    handles.events = cell(handles.number_of_event_types, 1);
+    handles.events = [];
 end
 
 % update the GUI handles
@@ -1179,17 +1170,14 @@ end
 % get the trial starts in concatenated samples
 x = (1 : EEG.pnts : EEG.pnts * EEG.trials) / EEG.srate;
 
-% get the y limits of the main axes
-y = get(handles.main_ax, 'ylim');
-
 % draw bottom arrow
-handles.trial_borders = plot(x, y(1),...
+handles.trial_borders = plot(x, 0,...
     'lineStyle', 'none',...
     'marker', '>',...
     'markerSize', 20,...
     'markerEdgeColor', [0.9, 0.9, 0.9],...
     'markerFaceColor', [0.6, 0.6, 0.6],...
-    'parent', handles.main_ax,...
+    'parent', handles.ax_lower_event,...
     'buttonDownFcn', {@bdf_mark_trial});
 
 % set previously marked trials color
@@ -1321,9 +1309,6 @@ switch type
           end
         end
         
-        % when changing the number of channels go back to 1
-        handles.vertical_scroll.Value = -1;
-        
         % replot the grid
         if handles.plot_vgrid
             delete(handles.v_gridlines);
@@ -1334,9 +1319,10 @@ switch type
             handles = rmfield(handles, 'h_gridlines');
         end
         
+        % update the handles
         guidata(object, handles);
         update_main_plot(object)
-        
+               
     case 'epoch_length'
         
         answer = inputdlg('length of epoch',...
@@ -1400,7 +1386,7 @@ switch type
     case 'vgrid_spacing'
         
         % display dialogue box
-        answer = inputdlg({'grid spacing (uV)'} , ...
+        answer = inputdlg({'grid spacing (s)'} , ...
             '', 1, {num2str( handles.v_grid_spacing )});
         
         % check for cancelled window
@@ -1605,31 +1591,7 @@ if isempty(event.Modifier)
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
-            
-            % get the new limits of the axes
-            y_limits = get(handles.main_ax, 'ylim');
-            
-            % update the event lower triangles
-            if isfield(handles, 'events')
-                
-                % check for empty cells (no events of that type)
-                check_event_type = cellfun(@(x) ~isempty(x), handles.events);
-                
-                valid_events = 1 : length(handles.events);
-                valid_events(~check_event_type) = [];
-                
-                % change the ydata for each event type
-                for n = valid_events
-                    set(handles.events{n}(:, 1), 'yData', y_limits(1));
-                end
-                                
-            end
-            
-            % reset the trial border markers
-            if isfield(handles, 'trial_borders')
-               set(handles.trial_borders, 'yData', y_limits(1));
-            end
-            
+                       
         case 'downarrow'
             scale = get(handles.txt_scale, 'value');
             % adjust by 30%
@@ -1654,32 +1616,6 @@ if isempty(event.Modifier)
             set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
             update_main_plot(object)
             
-            % get the new limits of the axes
-            y_limits = get(handles.main_ax, 'ylim');
-            
-            if isfield(handles, 'events')
-                % update the event lower triangles
-                
-                % check for empty cells (no events of that type)
-                check_event_type = cellfun(@(x) ~isempty(x), handles.events);
-                
-                valid_events = 1 : length(handles.events);
-                valid_events(~check_event_type) = [];
-                
-                % change the ydata for each event type
-                for n = valid_events
-                    set(handles.events{n}(:, 1), 'yData', y_limits(1));
-                end
-            end
-            
-            % get the new limits of the axes
-            y_limits = get(handles.main_ax, 'ylim');
-            
-            % reset the trial border markers
-            if isfield(handles, 'trial_borders')
-               set(handles.trial_borders, 'yData', y_limits(1));
-            end
-
         case 'pageup'
             
             top_channel = handles.disp_chans(1);
@@ -1738,7 +1674,6 @@ if isempty(event.Modifier)
                     % create an event where the mouse cursor is
                     cb_event_selection(object, [], str2double(event.Character), current_point);
                 else
-                    % TODO: overwrite any marker if there is one...
                     % get the window position
                     if verLessThan('matlab', '8.4')
                         tmp_limits = get(handles.main_ax, 'xlim');
@@ -1747,13 +1682,42 @@ if isempty(event.Modifier)
                         current_point = handles.main_ax.XLim(1);
                     end
                     
-                    % set the appropriate marker at the start of the window
-                    cb_event_selection(object, [], str2double(event.Character), current_point);
+                    % check for existing event
+                    event_type = str2double(event.Character);
+                    event_latencies = floor(cell2mat(get(handles.events(:, 1), 'xdata')));
+                    if any(event_latencies == current_point)
+                        % replace that event with new label
+                        event_number = find(event_latencies == current_point);
+                        
+                        % get color scheme
+                        event_colors = get(handles.main_ax, 'ColorOrder');
+                        
+                        % change color and user data
+                        set(handles.events(event_number, :), 'markerFaceColor', ...
+                            event_colors(event_type, :));
+                        
+                        set(handles.events(event_number, :), 'userData', ...
+                            event_type);
+                        
+                        % change location of marker on lower plot
+                        set(handles.events(event_number, 3), 'ydata', ...
+                            [event_type - 1, event_type]);
+                        set(handles.events(event_number, 3), 'color', ...
+                            event_colors(event_type, :));
+                        
+                    else
+                        % new event
+                        % set the appropriate marker at the start of the window
+                        cb_event_selection(object, [],...
+                            str2double(event.Character), ...
+                            current_point + handles.scoring_offset);
+                    end
 
-                    % go to the next page
-                    new_event.Modifier = [];
-                    new_event.Key = 'rightarrow';
-                    cb_key_pressed(object, new_event);
+                    % go to next window
+                    set(handles.cPoint, 'value', ...
+                        floor([current_point + handles.scoring_window] * EEG.srate));
+                    
+                    fcn_change_time(object, [])
                 end
             end
     end
@@ -1771,13 +1735,15 @@ elseif any(strcmp(event.Modifier, {'control', 'alt'}))
         case 'leftarrow'
             % move a little to the left
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - handles.epoch_length/5 * EEG.srate);
+                get(handles.cPoint, 'Value') ...
+                - handles.epoch_length/3 * EEG.srate);
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move a little to the right
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + handles.epoch_length/5 * EEG.srate);
+                get(handles.cPoint, 'Value') ...
+                + handles.epoch_length/3 * EEG.srate);
             fcn_change_time(object, [])
             
         case 'pageup'

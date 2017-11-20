@@ -9,6 +9,10 @@ if nargin < 2
     flag_plot = false;
 end
 
+% define options
+flag_baseline = 'difference'; % 'difference' | 'ratio'
+
+
 % remove bad trials
 if isfield (EEG, 'good_trials')
     EEG.data = EEG.data(:, :, EEG.good_trials);
@@ -58,19 +62,22 @@ for nCh = 1 : EEG.nbchan
     temp_mean = mean(norm_wavelet_power, 3);
     overall_baseline = mean(temp_mean(:, baseline_period), 2);
     
-    % subtract the trial baseline (each trial from its own)
-%     corrected_series = norm_wavelet_power - trial_baseline(:, ones(EEG.pnts, 1), :);
-    
-    % or divide by baseline (almost like newtimef)
-%     corrected_series = norm_wavelet_power ...
-%         ./repmat(trial_baseline, [1, size(norm_wavelet_power, 2), 1] );
-    
-    % or divide by overall baseline (like newtimef)
-    corrected_series = bsxfun(@rdivide, norm_wavelet_power, overall_baseline);
+    switch flag_baseline
+        case 'difference'
+            % trial minus the trial baseline
+            corrected_wavelet = norm_wavelet_power ...
+                - trial_baseline(:, ones(EEG.pnts, 1), :);
+            
+        case 'ratio'
+            % or divide by overall baseline (like newtimef)
+            corrected_wavelet = bsxfun(@rdivide, norm_wavelet_power, overall_baseline);
+    end
       
-    % get the absolute mean
-    wavelet_series(:, nCh, :) = 10 * log10(sqrt(mean(corrected_series .^ 2, 3)));
+    % get the absolute mean (newtimef just takes the mean directly)
+    wavelet_mean = sqrt(mean(corrected_wavelet .^ 2, 3)); 
     
+    % log transform in db
+    wavelet_series(:, nCh, :) = 10 * log10(wavelet_mean);
 end
     
 % contour plot of example channel's results.

@@ -4,6 +4,9 @@ function component_list = csc_component_plot(EEG)
 % make the figure
 handles = define_interface();
 
+% options
+handles.opt.freq_max = 45;
+
 % check for good channels field in EEG
 if ~isfield(EEG, 'good_channels')
     EEG.good_channels = true(EEG.nbchan, 1);
@@ -12,6 +15,11 @@ end
 % check for marked bad_data
 if ~isfield(EEG, 'bad_data')
    EEG.bad_data = false(1, EEG.pnts);   
+end
+
+% check for good trials
+if ~isfield(EEG, 'good_trials')
+   EEG.good_trials = true(1, EEG.trials);   
 end
 
 % check for EEG.icaact
@@ -44,7 +52,8 @@ set([handles.ax_erp_time, handles.ax_erp_image],...
 
 % check if trialed data
 if EEG.trials > 1
-    ica_data = reshape(EEG.icaact, size(EEG.icaact, 1), []);
+    ica_data = reshape(EEG.icaact(:, :, EEG.good_trials), ...
+        size(EEG.icaact, 1), []);
 else
     ica_data = EEG.icaact;
 end
@@ -61,8 +70,8 @@ window_length = 5 * EEG.srate;
     EEG.srate);            % sampling rate
     
 % eliminate filtered frequencies
-handles.spectral_range = spectral_range(spectral_range < 45);
-handles.spectral_data = spectral_data(spectral_range < 45, :, :)';
+handles.spectral_range = spectral_range(spectral_range < handles.opt.freq_max);
+handles.spectral_data = spectral_data(spectral_range < handles.opt.freq_max, :, :)';
 
 % update the figure handles
 guidata(handles.fig, handles)
@@ -269,15 +278,19 @@ end
 % ---------------------------- %
 % plot the image of all trials %
 % ---------------------------- %
+trials_image = squeeze(EEG.icaact(no_comp, :, :))';
+% turn lost trials into nans
+trials_image(~EEG.good_trials, :) = nan;
 handles.plots.image = ...
     imagesc(EEG.times / 1000, 1 : EEG.trials, ...
-    squeeze(EEG.icaact(no_comp, :, :))', ...
+    trials_image, ...
     'parent', handles.ax_erp_image);
 
 % ------------------------- %
 % plot the evoked potential %
 % ------------------------- %
-data_to_plot = mean(EEG.icaact(no_comp, : , :), 3)';
+data_to_plot = mean(EEG.icaact(no_comp, : , EEG.good_trials), 3)';
+
 if isfield(EEG, 'bad_data')
     data_to_plot(EEG.bad_data) = nan;
 elseif isfield(EEG, 'good_data')
@@ -360,14 +373,15 @@ else
 end
 
 % re-set the image of all trials %
-trial_images = squeeze(EEG.icaact(current_component, :, :))';
+trials_image = squeeze(EEG.icaact(current_component, :, :))';
+trials_image(~EEG.good_trials, :) = nan;
 set(handles.plots.image, ...
-    'cData', trial_images);
+    'cData', trials_image);
 % re-adjust the axes limits to match image percentiles
-set(handles.ax_erp_image, 'CLim', [prctile(trial_images(:), 2), prctile(trial_images(:), 98)]);
+set(handles.ax_erp_image, 'CLim', [prctile(trials_image(:), 2), prctile(trials_image(:), 98)]);
 
 % re-set the evoked potential %
-data_to_plot = mean(EEG.icaact(current_component, : , :), 3)';
+data_to_plot = mean(EEG.icaact(current_component, : , EEG.good_trials), 3)';
 data_to_plot(EEG.bad_data) = nan;
 set(handles.plots.erp_time, ...
     'ydata', data_to_plot);
