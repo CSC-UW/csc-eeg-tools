@@ -1,5 +1,7 @@
-function [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, flag_plot, flag_mode)
+function [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, flag_plot, flag_mode, flag_type)
 % turns event data from the csc_eeg_plotter into sleep stages and plots data
+
+handles = [];
 
 % Notes
 % ^^^^^
@@ -12,11 +14,13 @@ function [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, flag_plot, fl
 % custom options
 if nargin < 2
     flag_plot = false;
-    flag_mode = 0; % default to classical sleep scoring
-elseif nargin < 3
-    flag_mode = 0;
 end
-
+if nargin < 3
+    flag_mode = 0; % default to classical sleep scoring
+end
+if nargin < 4
+    flag_type = 0; % default to csc table
+end
 
 % remove all event 4 and save in separate arousal/artefact table
 % ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
@@ -51,7 +55,13 @@ elseif flag_mode == 1
     for n = 1 : sum(event4_logical)
         % find samples
         start_sample = floor(event4_table{n, 2} * EEG.srate);
-        end_sample = floor(EEG.csc_event_data{event4_ind(n) + 1, 2} * EEG.srate);
+        
+        % check that last event is a 4
+        if EEG.csc_event_data{end, 3} == 4
+            end_sample = EEG.pnts;
+        else
+            end_sample = floor(EEG.csc_event_data{event4_ind(n) + 1, 2} * EEG.srate);
+        end
         % mark the interval samples as true
         EEG.swa_scoring.arousals(start_sample : end_sample) = true;
     end
@@ -64,7 +74,7 @@ end
 tmp_events = EEG.csc_event_data(~event4_logical, :);
 
 % convert event timing from seconds to samples
-event_timing = floor([tmp_events{:, 2}] * EEG.srate);
+event_timing = ceil([tmp_events{:, 2}] * EEG.srate);
 
 % pre-allocate to wake
 stages = int8(ones(1, EEG.pnts) * -1);
@@ -90,8 +100,13 @@ stages(stages == 6) = 0;
 EEG.swa_scoring.stages = stages;
 
 % get the sleep stats
-table_data = swa_sleep_statistics(EEG, 0, 'deutsch', flag_mode);
+if flag_type
+    table_data = csc_sleep_statistics(EEG, flag_mode);
+else
+    table_data = swa_sleep_statistics(EEG, 0, 'deutsch', flag_mode);
+end
 
+% plot classic hypnogram and stage pie chart
 if flag_plot
     
     % add 1 to all stages except wake
