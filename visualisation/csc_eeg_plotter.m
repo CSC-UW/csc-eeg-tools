@@ -1677,17 +1677,28 @@ if isempty(event.Modifier)
                     % get the window position
                     if verLessThan('matlab', '8.4')
                         tmp_limits = get(handles.main_ax, 'xlim');
-                        current_point = tmp_limits(1);
+                        current_point = floor(tmp_limits(1));
                     else
-                        current_point = handles.main_ax.XLim(1);
+                        current_point = floor(handles.main_ax.XLim(1));
                     end
                     
                     % check for existing event
                     event_type = str2double(event.Character);
-                    event_latencies = floor(cell2mat(get(handles.events(:, 1), 'xdata')));
-                    if any(event_latencies == current_point)
+                    
+                    % check if its the first item
+                    if ~isfield(handles, 'events')
+                        event_latencies = [];
+                    elseif size(handles.events, 1) == 1
+                        % if there is only 1 event doesn't return a cell
+                        event_latencies = floor(get(handles.events(:, 1), 'xdata'));
+                    else
+                        event_latencies = floor(cell2mat(get(handles.events(:, 1), 'xdata')));
+                    end
+                    
+                    if any(event_latencies == [current_point + handles.scoring_offset])
                         % replace that event with new label
-                        event_number = find(event_latencies == current_point);
+                        event_number = ...
+                            find(event_latencies == [current_point + handles.scoring_offset]);
                         
                         % get color scheme
                         event_colors = get(handles.main_ax, 'ColorOrder');
