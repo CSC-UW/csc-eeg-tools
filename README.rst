@@ -23,29 +23,31 @@ Navigation
 +-------------------------------------+----------------------------------------------------------------+
 | Usage                               | Shortcut                                                       |
 +=====================================+================================================================+
-| number of displayed channels        | Ctrl + d                                                       |
+| number of displayed channels        | ctrl + d                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| change epoch length                 | Ctrl + e                                                       |
+| change epoch length                 | ctrl + e                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| toggle components/channels          | Ctrl + t                                                       |
+| toggle components/channels          | ctrl + t                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| set filter parameters               | Ctrl + f                                                       |
+| set filter parameters               | ctrl + f                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| move to next epoch                  | Arrow right                                                    |
+| move to next epoch                  | arrow right                                                    |
 +-------------------------------------+----------------------------------------------------------------+
-| move to previous epoch              | Arrow left                                                     |
+| move to previous epoch              | arrow left                                                     |
 +-------------------------------------+----------------------------------------------------------------+
-| move right (not a full epoch)       | Ctrl+Arrow right                                               |
+| move right (not a full epoch)       | ctrl + arrow right                                             |
 +-------------------------------------+----------------------------------------------------------------+
-| move left (not a full epoch)        | Ctrl+Arrow left                                                |
+| move left (not a full epoch)        | ctrl + arrow left                                              |
 +-------------------------------------+----------------------------------------------------------------+
-| move down to next channel section   | Page up                                                        |
+| move down to next channel section   | page up                                                        |
 +-------------------------------------+----------------------------------------------------------------+
-| move up to previous channel section | Page down                                                      | 
+| move up to previous channel section | page down                                                      | 
 +-------------------------------------+----------------------------------------------------------------+
-| set event marker                    | right mouse click on the spot where you want to set the event  |
+| set event marker                    | use keyboard numbers to place event at mouse position	       |
 +-------------------------------------+----------------------------------------------------------------+
-| delete event marker                 | right mouse click on the event marker                          |
+| set event marker alternative        | right mouse click and use context menu                         |
++-------------------------------------+----------------------------------------------------------------+
+| delete event marker                 | left mouse click on the event marker                           |
 +-------------------------------------+----------------------------------------------------------------+
 
 
@@ -54,21 +56,21 @@ View
 +-------------------------------------+----------------------------------------------------------------+
 | Usage                               | Shortcut                                                       |
 +=====================================+================================================================+
-| enlarge channels                    | Arrow up                                                       |
+| increase channel scale              | arrow up                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| decrease channels                   | Arrow down                                                     |
+| decrease channel scale              | arrow down                                                     |
 +-------------------------------------+----------------------------------------------------------------+
 | hide/show dotted vertical grid      | g                                                              |
 +-------------------------------------+----------------------------------------------------------------+
 | hide/show dotted horizontal grid    | h                                                              |
 +-------------------------------------+----------------------------------------------------------------+
-| set vertical scale spacing          | Ctrl + g                                                       |
+| set vertical scale spacing          | ctrl + g                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| set horizontal grid spacing         | Ctrl + h                                                       |
+| set horizontal grid spacing         | ctrl + h                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| hide channels                       | click on channel number                                        |
+| hide / mark channels                | click on channel label                                         |
 +-------------------------------------+----------------------------------------------------------------+
-| toggle negative up/down             | Ctrl + n                                                       |
+| toggle negative up/down             | ctrl + n                                                       |
 +-------------------------------------+----------------------------------------------------------------+
 
 
@@ -78,16 +80,30 @@ Tools
 +-------------------------------------+----------------------------------------------------------------+
 | Usage                               | Shortcut                                                       |
 +=====================================+================================================================+
-| load eeg                            | Ctrl + l                                                       |
+| load eeg                            | ctrl + l                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| save eeg                            | Ctrl + s                                                       |    
+| save eeg                            | ctrl + s                                                       |    
 +-------------------------------------+----------------------------------------------------------------+
-| export hidden channels              | Ctrl + x                                                       |
+| export hidden channels              | ctrl + x                                                       |
 +-------------------------------------+----------------------------------------------------------------+
-| export marked trails                | Ctrl + t                                                       |
+| export marked trials                | ctrl + t                                                       |
 +-------------------------------------+----------------------------------------------------------------+
 
-How to use the Functions
+How to sleep score using the plotter
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Open the *csc_eeg_plotter(EEG)*, you will likely want to adjust the montage to match a more typical sleep scoring montage (e.g. F3-A2). 
+
+For classic sleep scoring, change the mode in the tools menu and use the numbers on the keyboard to mark the stages (wake should be number 6, not 0).
+You can mark arousal beginnings and end using the number 4 (since there is no NREM4 anymore).
+
+For continuous sleep scoring simple place a marker at the beginning of the stage transition (keyboard number at mouse position).
+
+If there is a long period prior to sleep that should not be considered for scoring (e.g. lights on), then simply begin scoring at a later epoch.
+
+Once your scoring is complete, you can use the function *csc_events_to_hypnogram* to produce a table and convert into stages stored in *EEG.swa_scoring.stages*.
+You should probably also save the events to file just in case (using the event menu in the plotter).
+
+How to use the functions
 ^^^^^^^^^^^^^^^^^^^^^^^^
 in this example we assume `EEG` is you loaded dataset:
 
@@ -116,7 +132,7 @@ if you have run e.g. ICA on your dataset and want to look/remove components
     EEG = pop_subcomp( EEG , find(~EEG.good_components));
     EEG = eeg_checkset(EEG);
     ```
-
+    you can also open the *csc_eeg_plotter* to visualise the components and also plot the channel activity as if the selected components had already been removed
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
