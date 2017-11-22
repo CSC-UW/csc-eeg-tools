@@ -122,7 +122,6 @@ handles.menu.save = uimenu(handles.menu.file ,...
     'Accelerator', 's' );
 
 handles.menu.montage = uimenu(handles.fig, 'label', 'montage', 'enable', 'off');
-
 handles.menu.events = uimenu(handles.fig, 'label', 'events', 'accelerator', 'v');
 
 % options menu
@@ -1001,11 +1000,15 @@ end
 % pre-allocate the event data
 event_data = cell(sum(no_events), 3);
 
-% insert latencies
-event_data(:, 2) = get(events(:,1), 'xdata');
-
-% insert type
-event_data(:, 3) = get(events(:,1), 'userData');
+% insert latencies and event type
+if size(events, 1) == 1
+    % single handles return a double not a cell
+    event_data(:, 2) = {get(events(:,1), 'xdata')};
+    event_data(:, 3) = {get(events(:,1), 'userData')};
+else
+    event_data(:, 2) = get(events(:,1), 'xdata');
+    event_data(:, 3) = get(events(:,1), 'userData');
+end
 
 % insert event labels
 % NOTE: no one ever changes the event labels from default so this might be deletable
