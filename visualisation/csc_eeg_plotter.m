@@ -276,7 +276,9 @@ if nargout > 0
     end
     
     % just add the hidden channels and trials to the data
-    EEG.marked_trials = handles.trials;
+    if EEG.trials > 1
+        EEG.marked_trials = handles.trials;
+    end
     % TODO: won't work with different montages just yet
     EEG.hidden_channels = handles.hidden_chans;
         

@@ -24,7 +24,7 @@ end
 PLF=(abs(mean(hilberT,2))); 
 
 % statistical significance
-tendbaseline=726; % end of baseline, in sample
+tendbaseline=200; % end of baseline, in sample
 alpha=0.01; %alpha value
 xaxe=0:0.001:1;
 meanbase=mean(PLF(1:tendbaseline));
