@@ -35,7 +35,7 @@ event4_table = [EEG.csc_event_data(event4_logical, :)];
 EEG.swa_scoring.arousals = false(EEG.pnts, 1);
 
 % loop over each event 4
-if flag_mode == 0
+if flag_mode == 0 && sum(event4_logical) > 0
     % there should be an even number of event 4s since each marks start and end
     % of an arousal
     if mod(sum(event4_logical), 2)
@@ -44,7 +44,7 @@ if flag_mode == 0
     
     for n = 1 : 2 : sum(event4_logical)
         % find samples
-        start_sample = floor(event4_table{n, 2} * EEG.srate);
+        start_sample = floor(event4_table{n, 2} + 0.000001 * EEG.srate) + 1;
         end_sample = floor(event4_table{n + 1, 2} * EEG.srate);
         % mark the interval samples as true
         EEG.swa_scoring.arousals(start_sample : end_sample) = true;
@@ -54,7 +54,7 @@ elseif flag_mode == 1
     % each artefact's end is simply marked by the next stage
     for n = 1 : sum(event4_logical)
         % find samples
-        start_sample = floor(event4_table{n, 2} * EEG.srate);
+        start_sample = floor(event4_table{n, 2} * EEG.srate) + 1;
         
         % check that last event is a 4
         if EEG.csc_event_data{end, 3} == 4
@@ -75,6 +75,11 @@ tmp_events = EEG.csc_event_data(~event4_logical, :);
 
 % convert event timing from seconds to samples
 event_timing = ceil([tmp_events{:, 2}] * EEG.srate);
+
+% check that first event sample is not 0
+if event_timing(1) == 0
+    event_timing(1) = 1;
+end
 
 % pre-allocate to wake
 stages = int8(ones(1, EEG.pnts) * -1);
@@ -100,7 +105,7 @@ stages(stages == 6) = 0;
 EEG.swa_scoring.stages = stages;
 
 % get the sleep stats
-if flag_type
+if flag_type == 0
     table_data = csc_sleep_statistics(EEG, flag_mode);
 else
     table_data = swa_sleep_statistics(EEG, 0, 'deutsch', flag_mode);
