@@ -1,6 +1,11 @@
 function [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, flag_plot, flag_mode, flag_type)
 % turns event data from the csc_eeg_plotter into sleep stages and plots data
 
+% [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, ...
+%     flag_plot, ... % [0/1] whether to plot the hypnogram or not
+%     flag_mode, ... % [0/1] whether classic [0] or continuous [1] scoring was used... or basically whether arousals have two 4 events [0] or artefacts have a single event 4 at the start [1]
+%     flag_type) % [0/1] whether to output the long table [0] with lots of accurate parameters (for research purposes), or the nice summary table for patient reports [1]
+
 handles = [];
 
 % Notes
