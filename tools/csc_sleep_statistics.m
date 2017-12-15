@@ -1,4 +1,6 @@
 function table_sleep = csc_sleep_statistics(EEG, flag_mode)
+% create a table structure with "all" sleep staging information
+% single row allows ease of stacking with multiple nights / participants
 
 % extract stages (cleaner look)
 stages = EEG.swa_scoring.stages;
@@ -18,8 +20,20 @@ table_sleep = array2table(zeros(1, length(table_variables)), 'VariableNames', ta
 
 % calculate the borders of sleep
 wake_start = find(diff([0, stages == 0 | stages == 6]) == 1);
+if isempty(wake_start)
+    % first marked stage taken as wake_start even if other stage was marked
+    wake_start = find(stages >= 0, 1, 'first');
+end
+
 wake_end = find(diff([0, stages == 0 |stages == 6]) == -1);
+% catch times where only single wake event or is the last event 
+if isempty(wake_end) || wake_end(end) < wake_start(end)
+    wake_end(end+1) = EEG.pnts;
+end
 lights_off = wake_start(1);
+
+% find sleep start
+sleep_start = find(stages > 0, 1, 'first');
 
 % check for last stage sleep
 % calculate how much wake time there is after sleep finishes
@@ -40,7 +54,7 @@ end
 % total summaries
 table_sleep.total_recording_time = length(stages) / [EEG.srate * 60];
 table_sleep.total_dark_time = [length(stages) - lights_off] / [EEG.srate * 60] - artefact_time;
-table_sleep.sleep_period_time = table_sleep.total_dark_time - [wake_time_after_sleep + wake_end(1) - lights_off] / [EEG.srate * 60];
+table_sleep.sleep_period_time = table_sleep.total_dark_time - [wake_time_after_sleep + sleep_start - lights_off] / [EEG.srate * 60];
 table_sleep.total_sleep_time = sum(EEG.swa_scoring.stages(:) > 0 & ~EEG.swa_scoring.arousals(:)) / [EEG.srate * 60];
 table_sleep.sleep_efficiency_tdt = table_sleep.total_sleep_time / table_sleep.total_dark_time * 100;
 table_sleep.sleep_efficiency_spt = table_sleep.total_sleep_time / table_sleep.sleep_period_time * 100;
@@ -49,7 +63,9 @@ table_sleep.sleep_efficiency_spt = table_sleep.total_sleep_time / table_sleep.sl
 table_sleep.wake_minutes =  sum(EEG.swa_scoring.stages(:) == 0 & ~EEG.swa_scoring.arousals(:)) / [EEG.srate * 60];
 table_sleep.wake_percentage_tdt = table_sleep.wake_minutes / table_sleep.total_dark_time * 100;
 table_sleep.wake_percentage_spt = table_sleep.wake_minutes / table_sleep.sleep_period_time * 100;
-table_sleep.wake_latency = [wake_start(2) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : wake_start(2)))] / [EEG.srate * 60];
+if length(wake_start) > 1
+    table_sleep.wake_latency = [wake_start(2) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : wake_start(2)))] / [EEG.srate * 60];
+end
 table_sleep.wake_bouts = length(wake_start);
 
 % N1 values
