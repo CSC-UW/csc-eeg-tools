@@ -157,7 +157,7 @@ if flag_plot
     ylabel('sleep stage')
     
     % make a pie chart
-    % TODO: make pie chart from new csc table format
+    % TODO: make pie chart with csc table output
     if flag_type
         pie_data = cell2mat(table_data(3:7, 4));
         figure('color', 'w');
