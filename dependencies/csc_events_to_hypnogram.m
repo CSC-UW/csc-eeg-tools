@@ -1,6 +1,11 @@
 function [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, flag_plot, flag_mode, flag_type)
 % turns event data from the csc_eeg_plotter into sleep stages and plots data
 
+% [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, ...
+%     flag_plot, ... % [0/1] whether to plot the hypnogram or not
+%     flag_mode, ... % [0/1] whether classic [0] or continuous [1] scoring was used... or basically whether arousals have two 4 events [0] or artefacts have a single event 4 at the start [1]
+%     flag_type) % [0/1] whether to output the long table [0] with lots of accurate parameters (for research purposes), or the nice summary table for patient reports [1]
+
 handles = [];
 
 % Notes
@@ -35,7 +40,7 @@ event4_table = [EEG.csc_event_data(event4_logical, :)];
 EEG.swa_scoring.arousals = false(EEG.pnts, 1);
 
 % loop over each event 4
-if flag_mode == 0
+if flag_mode == 0 && sum(event4_logical) > 0
     % there should be an even number of event 4s since each marks start and end
     % of an arousal
     if mod(sum(event4_logical), 2)
@@ -44,7 +49,7 @@ if flag_mode == 0
     
     for n = 1 : 2 : sum(event4_logical)
         % find samples
-        start_sample = floor(event4_table{n, 2} * EEG.srate);
+        start_sample = floor(event4_table{n, 2} + 0.000001 * EEG.srate) + 1;
         end_sample = floor(event4_table{n + 1, 2} * EEG.srate);
         % mark the interval samples as true
         EEG.swa_scoring.arousals(start_sample : end_sample) = true;
@@ -54,7 +59,7 @@ elseif flag_mode == 1
     % each artefact's end is simply marked by the next stage
     for n = 1 : sum(event4_logical)
         % find samples
-        start_sample = floor(event4_table{n, 2} * EEG.srate);
+        start_sample = floor(event4_table{n, 2} * EEG.srate) + 1;
         
         % check that last event is a 4
         if EEG.csc_event_data{end, 3} == 4
@@ -75,6 +80,11 @@ tmp_events = EEG.csc_event_data(~event4_logical, :);
 
 % convert event timing from seconds to samples
 event_timing = ceil([tmp_events{:, 2}] * EEG.srate);
+
+% check that first event sample is not 0
+if event_timing(1) == 0
+    event_timing(1) = 1;
+end
 
 % pre-allocate to wake
 stages = int8(ones(1, EEG.pnts) * -1);
@@ -145,7 +155,7 @@ if flag_plot
     % label axes
     xlabel('time (hours)')
     ylabel('sleep stage')
-        
+    
     % make a pie chart
     % TODO: make pie chart from new csc table format
     if flag_type
