@@ -59,8 +59,10 @@ table_sleep.N1_minutes =  sum(EEG.swa_scoring.stages(:) ==1 & ~EEG.swa_scoring.a
 table_sleep.N1_percentage_tdt = table_sleep.N1_minutes / table_sleep.total_dark_time * 100;
 table_sleep.N1_percentage_spt = table_sleep.N1_minutes / table_sleep.sleep_period_time * 100;
 table_sleep.N1_percentage_tst = table_sleep.N1_minutes / table_sleep.total_sleep_time * 100;
+if ~isempty(N1_starts)
 table_sleep.N1_latency = [N1_starts(1) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : N1_starts(1)))] / [EEG.srate * 60];
 table_sleep.N1_bouts = length(N1_starts);
+end
 
 % N2 values
 N2_starts = find(diff([0, stages == 2]) == 1);
@@ -68,8 +70,10 @@ table_sleep.N2_minutes =  sum(EEG.swa_scoring.stages(:)== 2 & ~EEG.swa_scoring.a
 table_sleep.N2_percentage_tdt = table_sleep.N2_minutes / table_sleep.total_dark_time * 100;
 table_sleep.N2_percentage_spt = table_sleep.N2_minutes / table_sleep.sleep_period_time * 100;
 table_sleep.N2_percentage_tst = table_sleep.N2_minutes / table_sleep.total_sleep_time * 100;
-table_sleep.N2_latency = [N2_starts(1) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : N2_starts(1)))] / [EEG.srate * 60];
-table_sleep.N2_bouts = length(N2_starts);
+if ~isempty(N2_starts)
+    table_sleep.N2_latency = [N2_starts(1) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : N2_starts(1)))] / [EEG.srate * 60];
+    table_sleep.N2_bouts = length(N2_starts);
+end
 
 % N3 values
 N3_starts = find(diff([0, stages == 3]) == 1);
@@ -77,8 +81,10 @@ table_sleep.N3_minutes =  sum(EEG.swa_scoring.stages(:) == 3 & ~EEG.swa_scoring.
 table_sleep.N3_percentage_tdt = table_sleep.N3_minutes / table_sleep.total_dark_time * 100;
 table_sleep.N3_percentage_spt = table_sleep.N3_minutes / table_sleep.sleep_period_time * 100;
 table_sleep.N3_percentage_tst = table_sleep.N3_minutes / table_sleep.total_sleep_time * 100;
-table_sleep.N3_latency = [N3_starts(1) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : N3_starts(1)))] / [EEG.srate * 60];
-table_sleep.N3_bouts = length(N3_starts);
+if ~isempty(N3_starts)
+    table_sleep.N3_latency = [N3_starts(1) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : N3_starts(1)))] / [EEG.srate * 60];
+    table_sleep.N3_bouts = length(N3_starts);
+end
 
 % REM values
 REM_starts = find(diff([0, stages == 5]) == 1);
@@ -86,5 +92,7 @@ table_sleep.REM_minutes = sum(EEG.swa_scoring.stages(:) == 5 & ~EEG.swa_scoring.
 table_sleep.REM_percentage_tdt = table_sleep.REM_minutes / table_sleep.total_dark_time * 100;
 table_sleep.REM_percentage_spt = table_sleep.REM_minutes / table_sleep.sleep_period_time * 100;
 table_sleep.REM_percentage_tst = table_sleep.REM_minutes / table_sleep.total_sleep_time * 100;
-table_sleep.REM_latency = [REM_starts(1) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : REM_starts(1)))] / [EEG.srate * 60];
-table_sleep.REM_bouts = length(REM_starts);
+if ~isempty(REM_starts)
+    table_sleep.REM_latency = [REM_starts(1) - lights_off - sum(EEG.swa_scoring.arousals(lights_off : REM_starts(1)))] / [EEG.srate * 60];
+    table_sleep.REM_bouts = length(REM_starts);
+end

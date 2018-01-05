@@ -100,7 +100,7 @@ stages(stages == 6) = 0;
 EEG.swa_scoring.stages = stages;
 
 % get the sleep stats
-if flag_type
+if flag_type == 0
     table_data = csc_sleep_statistics(EEG, flag_mode);
 else
     table_data = swa_sleep_statistics(EEG, 0, 'deutsch', flag_mode);
@@ -147,7 +147,10 @@ if flag_plot
     ylabel('sleep stage')
         
     % make a pie chart
-    pie_data = cell2mat(table_data(3:7, 4));
-    figure('color', 'w');
-    handles.pie = pie(pie_data, {'', '', '', '', ''});
+    % TODO: make pie chart from new csc table format
+    if flag_type
+        pie_data = cell2mat(table_data(3:7, 4));
+        figure('color', 'w');
+        handles.pie = pie(pie_data, {'', '', '', '', ''});
+    end
 end
