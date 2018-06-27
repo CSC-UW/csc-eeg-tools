@@ -1,4 +1,4 @@
-function mff_export_event_track(meta_data, event_track_name, events)
+function mff_export_event_track_from_meta_data(meta_data, event_track_name, events)
     % events is a structure that has the event info
     event_track_file = [meta_data.meta_file filesep sprintf('Events_%s.xml', strrep(event_track_name, ' ', '_'))];
     
