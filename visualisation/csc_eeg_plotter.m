@@ -1094,7 +1094,7 @@ handles.events(end+1, 1) = plot(x, 0,...
     'markerFaceColor', event_colors(event_type, :),...
     'userData', event_type,...
     'parent', handles.ax_lower_event,...
-    'buttonDownFcn', {@bdf_delete_event});
+    'buttonDownFcn', {@bdf_event_marker});
 
 % draw top triangle
 handles.events(end, 2) = plot(x, y(2),...
@@ -1105,7 +1105,7 @@ handles.events(end, 2) = plot(x, y(2),...
     'markerFaceColor', event_colors(event_type, :),...
     'userData', event_type,...
     'parent', handles.main_ax,...
-    'buttonDownFcn', {@bdf_delete_event});
+    'buttonDownFcn', {@bdf_event_marker});
 
 % mark the spike axes
 % ~~~~~~~~~~~~~~~~~~~
@@ -1122,21 +1122,60 @@ handles.events(end, 3) = line([sample_point, sample_point], ...
 % update the GUI handles
 guidata(handles.fig, handles)
 
-function bdf_delete_event(object, ~)
+function bdf_event_marker(object, event_data)
 % get the handles
 handles = guidata(object);
 
 % calculate the event number (which row is the object handle in)
 event_number = any(object == handles.events, 2);
 
-% erase the object from the main and spike axes
-delete(handles.events(event_number, :));
+if event_data.Button == 1   
+    % show event label if left click
+    
+    % get the event labels
+    all_labels = get(handles.selection.item, 'label');
 
-% erase the event from the list
-handles.events(event_number, :) = [];
+    % check for existing textbox
+    if isfield(handles, 'textbox')
+        set(handles.textbox, ...
+            'string', all_labels{object.UserData});
+    else
+        % create a textbox
+        box_location = [0.5, 0.6, 0, 0];
+        handles.textbox = annotation(...
+            'textbox', box_location, ...
+            'string', all_labels{object.UserData}, ...
+            'fitBoxToText','on', ...
+            'horizontalAlignment', 'center', ...
+            'fontSize', 20, ...
+            'FontWeight', 'bold', ...
+            'backgroundColor', handles.colorscheme.bg_col_1, ...
+            'color', handles.colorscheme.fg_col_1, ...
+            'edgeColor', handles.colorscheme.fg_col_1);
+    end
+    
+    % update the GUI handles
+    guidata(handles.fig, handles)
+    
+    % show event label for a second
+    set(handles.textbox, 'visible', 'on');
+    pause(1);
+    set(handles.textbox, 'visible', 'off');
+    
+elseif event_data.Button == 3
+    % erase if right click
+    
+    % erase the object from the main and spike axes
+    delete(handles.events(event_number, :));
+    
+    % erase the event from the list
+    handles.events(event_number, :) = [];
+    
+    % update the GUI handles
+    guidata(handles.fig, handles)
+end
 
-% update the GUI handles
-guidata(handles.fig, handles)
+
 
 function fcn_redraw_events(object, ~)
 % function to erase all events and redraw their markers based on the
