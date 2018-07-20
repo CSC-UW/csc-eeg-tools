@@ -24,9 +24,13 @@ baseline_period = EEG.times >= -400 & EEG.times <= -100;
 normalisation_period = EEG.times >= -600 & EEG.times <= 600;
 
 % run single trial to get output sizes
+% NOTE: used to be just 'amor' wavelet with no parameters
+gamma = 3;
+time_width = 16;
 [~, freq_range, ~] = cwt(...
     double(EEG.data(1, :, 1)), ...
-    'amor', EEG.srate);
+    'morse', EEG.srate, ...
+    'waveletparameters', [gamma, time_width]);
 no_freqs = length(freq_range);     
         
 % pre-allocate wavelet_series
@@ -34,20 +38,22 @@ trial_wavelet = nan(no_freqs, EEG.pnts, EEG.trials);
 wavelet_series = nan(no_freqs, EEG.nbchan, EEG.pnts);
 
 % loop over all trials and channels and keep the mean
-swa_progress_indicator('initialise', 'number of trials complete');
+swa_progress_indicator('initialise', 'number of channels complete');
 for nCh = 1 : EEG.nbchan
     swa_progress_indicator('update', nCh, EEG.nbchan);
 
     for nT = 1 : EEG.trials
         trial_wavelet(:, :, nT) = cwt(...
             double(EEG.data(nCh, :, nT)), ...
-            'amor', EEG.srate);
+            'morse', EEG.srate, ...
+            'waveletparameters', [gamma, time_width]);
     end
     
     % calculate wavelet power
     wavelet_power = trial_wavelet .* conj(trial_wavelet);
     
-    % normalise by full time series mean (like newtimef
+    % normalise by full time series mean (like newtimef 1282)
+    % Or normalise by a long baseline period
     % NOTE: each trial has its own mean
     % TODO: explore whether trial or whole series normalisation is better
     mean_wavelet_power = mean(wavelet_power(:, normalisation_period, :), 2);
@@ -74,10 +80,13 @@ for nCh = 1 : EEG.nbchan
     end
       
     % get the absolute mean (newtimef just takes the mean directly)
-    wavelet_mean = sqrt(mean(corrected_wavelet .^ 2, 3)); 
+%     wavelet_mean = sqrt(mean(corrected_wavelet .^ 2, 3));
+    % NOTE: absolute mean is odd because you lose the negative power
+    wavelet_mean = mean(corrected_wavelet, 3);
     
     % log transform in db
-    wavelet_series(:, nCh, :) = 10 * log10(wavelet_mean);
+%     wavelet_series(:, nCh, :) = 10 * log10(wavelet_mean);
+    wavelet_series(:, nCh, :) = wavelet_mean;
 end
     
 % contour plot of example channel's results.
