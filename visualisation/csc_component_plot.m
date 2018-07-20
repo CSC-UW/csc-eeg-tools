@@ -13,8 +13,13 @@ if ~isfield(EEG, 'good_channels')
 end
 
 % check for marked bad_data
-if ~isfield(EEG, 'bad_data')
-   EEG.bad_data = false(1, EEG.pnts);   
+% NOTE: different names are used so check first
+good_samples_check = {'bad_data', 'good_data', 'good_samples'};
+[field_id] = isfield(EEG, good_samples_check);
+if sum(field_id) == 1
+    EEG.good_samples = EEG.(good_samples_check{field_id});
+else
+    EEG.good_samples = true(1, EEG.pnts);
 end
 
 % check for good trials
@@ -290,11 +295,8 @@ handles.plots.image = ...
 % plot the evoked potential %
 % ------------------------- %
 data_to_plot = mean(EEG.icaact(no_comp, : , EEG.good_trials), 3)';
-
-if isfield(EEG, 'bad_data')
-    data_to_plot(EEG.bad_data) = nan;
-elseif isfield(EEG, 'good_data')
-    data_to_plot(~EEG.good_data) = nan;
+if isfield(EEG, 'good_samples')
+    data_to_plot(~EEG.good_samples) = nan;
 end
 
 handles.plots.erp_time = ...
@@ -382,7 +384,10 @@ set(handles.ax_erp_image, 'CLim', [prctile(trials_image(:), 2), prctile(trials_i
 
 % re-set the evoked potential %
 data_to_plot = mean(EEG.icaact(current_component, : , EEG.good_trials), 3)';
-data_to_plot(EEG.bad_data) = nan;
+if isfield(EEG, 'good_samples')
+    data_to_plot(~EEG.good_samples) = nan;
+end
+
 set(handles.plots.erp_time, ...
     'ydata', data_to_plot);
 
