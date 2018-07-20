@@ -830,7 +830,13 @@ if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
 end
 
 % adjust initially scaling to match the data
-channel_variance = nanstd(eegData(1, :));
+% find first good channel
+if isfield(EEG, 'good_channels')
+    g_chan = find(EEG.good_channels, 1);
+    channel_variance = nanstd(eegData(g_chan, :));
+else
+    channel_variance = nanstd(eegData(1, :));
+end
 set(handles.txt_scale, 'value', channel_variance * 3);
 
 % check the data length
@@ -1749,15 +1755,15 @@ elseif any(strcmp(event.Modifier, {'control', 'alt'}))
         case 'leftarrow'
             % move a little to the left
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') ...
-                - handles.epoch_length/3 * EEG.srate);
+                floor(get(handles.cPoint, 'Value') ...
+                - handles.epoch_length/3 * EEG.srate));
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move a little to the right
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') ...
-                + handles.epoch_length/3 * EEG.srate);
+                floor(get(handles.cPoint, 'Value') ...
+                + handles.epoch_length/3 * EEG.srate));
             fcn_change_time(object, [])
             
         case 'pageup'
