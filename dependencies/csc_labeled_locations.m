@@ -1,5 +1,7 @@
 % plot electrode locations with labels
 
+e_loc = csc_add2dlocations(EEG.chanlocs);
+
 hdl.fig = figure('color', 'w');
 hdl.ax = axes('nextplot', 'add');
 

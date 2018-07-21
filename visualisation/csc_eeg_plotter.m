@@ -95,22 +95,6 @@ handles.ax_lower_event = axes(...
     'visible',      'off');
 
 
-% create the uicontextmenu for the main axes
-% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-handles.selection.menu = uicontextmenu;
-set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
-% TODO: move to loading stage and read from file or create these defaults
-for n = 1 : handles.number_of_event_types
-    handles.selection.item(n) = uimenu(handles.selection.menu,...
-        'label', ['event ', num2str(n)], 'userData', n);
-    set(handles.selection.item(n),...
-        'callback',     {@cb_event_selection, n});
-end
-
-% create cell array of the valid numbers for keyboard shortcuts
-handles.valid_event_keys = cellfun(@num2str, num2cell(1:handles.number_of_event_types), ...
-    'uniformoutput', 0);
-
 % create the menu bar
 % ~~~~~~~~~~~~~~~~~~~
 handles.menu.file = uimenu(handles.fig, 'label', 'file');
@@ -120,9 +104,18 @@ handles.menu.load = uimenu(handles.menu.file ,...
 handles.menu.save = uimenu(handles.menu.file ,...
     'Label', 'save eeg' ,...
     'Accelerator', 's' );
-
 handles.menu.montage = uimenu(handles.fig, 'label', 'montage', 'enable', 'off');
-handles.menu.events = uimenu(handles.fig, 'label', 'events', 'accelerator', 'v');
+
+% events menu
+handles.menu.events = uimenu(handles.fig, 'label', 'events');
+handles.menu.event_list = uimenu(handles.menu.events, 'label', 'event list');
+handles.menu.event_labels = uimenu(handles.menu.events, 'label', 'event labels');
+set(handles.menu.event_list, 'callback', {@fcn_event_browser});
+set(handles.menu.event_labels, 'callback', {@fcn_event_labels});
+
+% create event context menu for main axes
+handles.selection.menu = uicontextmenu;
+set(handles.main_ax, 'uicontextmenu', handles.selection.menu);
 
 % options menu
 handles.menu.options = uimenu(handles.fig, 'label', 'options');
@@ -205,7 +198,6 @@ set(handles.fig, 'closeRequestFcn', {@fcn_close_window});
 set(handles.menu.load,      'callback', {@fcn_load_eeg});
 set(handles.menu.save,      'callback', {@fcn_save_eeg});
 set(handles.menu.montage,   'callback', {@fcn_montage_setup});
-set(handles.menu.events,    'callback', {@fcn_event_browser});
 
 set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
@@ -274,7 +266,7 @@ if nargout > 0
     if isfield(handles, 'events')
         EEG.csc_event_data = fcn_compute_events(handles);
     end
-    
+        
     % just add the hidden channels and trials to the data
     EEG.marked_trials = handles.trials;
     % TODO: won't work with different montages just yet
@@ -744,7 +736,13 @@ if isfield(EEG, 'csc_montage')
     end
 end
 
+% check event data
+% ~~~~~~~~~~~~~~~~
 if isfield(EEG, 'csc_event_data') && ~isempty(EEG.csc_event_data)
+    
+    % adjust number of events (minimum 6)
+    handles.number_of_event_types = max(6, max([EEG.csc_event_data{:, 3}]));
+    
     % check for later event than the length of the data
     if max([EEG.csc_event_data{:, 2}]) > EEG.xmax
         % delete the field
@@ -753,7 +751,51 @@ if isfield(EEG, 'csc_event_data') && ~isempty(EEG.csc_event_data)
     end
 end
 
-% check for previous
+% check event labels
+% ~~~~~~~~~~~~~~~~~~
+if isfield(EEG, 'csc_label_data') && ~isempty(EEG.csc_label_data)
+    % set number of events
+    handles.number_of_event_types = EEG.csc_label_data{end, 1};
+    % assign correct labels to the context menu
+    for n = 1 : handles.number_of_event_types
+        handles.selection.item(n) = uimenu(handles.selection.menu,...
+            'text', EEG.csc_label_data{n, 2}, 'userData', n);
+        set(handles.selection.item(n),...
+            'callback', {@cb_event_selection, n});
+    end
+else
+    % assign defaults to the context menu
+    for n = 1 : handles.number_of_event_types
+        handles.selection.item(n) = uimenu(handles.selection.menu,...
+            'text', ['event ', num2str(n)], 'userData', n);
+        set(handles.selection.item(n),...
+            'callback',     {@cb_event_selection, n});
+    end
+    % create csc_label_data
+    EEG.csc_label_data = cell(handles.number_of_event_types, 3);
+    EEG.csc_label_data(:, 1) = num2cell(1 : handles.number_of_event_types);
+    EEG.csc_label_data(:, 2) = {handles.selection.item.Text};
+    % TODO: include color selector for event types
+    EEG.csc_label_data(:, 3) = {'-'};
+end
+
+% adjust spike ax for number of events
+set(handles.spike_ax, ...
+    'yLim', [0 handles.number_of_event_types]);
+        
+% create cell array of the valid numbers for keyboard shortcuts
+handles.valid_event_keys = cellfun(@num2str, ...
+    num2cell(1:handles.number_of_event_types), ...
+    'uniformoutput', 0);
+
+% set the color order
+if handles.number_of_event_types > 7
+    set(handles.main_ax, ...
+        'colorOrder', parula(handles.number_of_event_types));
+end
+
+% check for previous montage options
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if ~isfield(EEG, 'csc_montage')
     % assign defaults
     EEG.csc_montage.name = 'original';
@@ -887,6 +929,234 @@ end
 
 % Event Functions
 % ^^^^^^^^^^^^^^^
+function fcn_event_labels(object, ~)
+% get the handles
+handles.csc_plotter = guidata(object);
+
+handles.fig = figure(...
+    'name',         'event labels',...
+    'numberTitle',  'off',...
+    'color',        handles.csc_plotter.colorscheme.bg_col_1,...
+    'menuBar',      'none',...
+    'units',        'normalized',...
+    'outerPosition',[0 0.5 0.2 0.3]);
+
+% labels table
+handles.table = uitable(...
+    'parent',       handles.fig             ,...
+    'units',        'normalized'            ,...
+    'position',     [0.05, 0.25, 0.9, 0.75]   ,...
+    'backgroundcolor', handles.csc_plotter.colorscheme.bg_col_2 ,...
+    'foregroundcolor', handles.csc_plotter.colorscheme.fg_col_1 ,...
+    'columnName',   {'number', 'label', 'color'}, ...
+    'columnFormat', {'numeric', 'char', 'char'}, ...
+    'columnEditable', [false, true, false]);
+
+% get the underlying java properties
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+jscroll = findjobj(handles.table);
+jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
+
+% make the table sortable
+% get the java table from the jscroll
+jtable = jscroll.getViewport.getView;
+% avoid java error ("exception in thread "AWT-EventQueue-0") by waiting...
+pause(0.05); 
+jtable.setSortable(true);
+jtable.setMultiColumnSortable(true);
+
+% auto-adjust the column width
+jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+
+% create the buttons
+handles.button_remove = uicontrol(...
+    'Parent',   handles.fig,...
+    'Style',    'push',...    
+    'String',   '-',...
+    'ForegroundColor', 'k',...
+    'Units',    'normalized',...
+    'Position', [0.35 0.15 0.05 0.05],...
+    'FontName', 'Century Gothic',...
+    'FontWeight', 'bold',...   
+    'FontSize', 10);
+set(handles.button_remove, 'callback', {@fcn_label_options, 'remove'});
+
+handles.button_add = uicontrol(...
+    'Parent',   handles.fig,...
+    'Style',    'push',...    
+    'String',   '+',...
+    'ForegroundColor', 'k',...
+    'Units',    'normalized',...
+    'Position', [0.6 0.15 0.05 0.05],...
+    'FontName', 'Century Gothic',...
+    'FontWeight', 'bold',...   
+    'FontSize', 10);
+set(handles.button_add, 'callback', {@fcn_label_options, 'add'});
+
+% load/save/apply
+handles.button_import = uicontrol(...
+    'Parent',   handles.fig,...
+    'Style',    'push',...    
+    'String',   'import',...
+    'ForegroundColor', 'k',...
+    'Units',    'normalized',...
+    'Position', [0.05 0.05 0.2 0.05],...
+    'FontName', 'Century Gothic',...
+    'FontWeight', 'bold',...   
+    'FontSize', 10);
+set(handles.button_import, 'callback', {@fcn_label_options, 'import'});
+
+handles.button_export = uicontrol(...
+    'Parent',   handles.fig,...
+    'Style',    'push',...    
+    'String',   'export',...
+    'ForegroundColor', 'k',...
+    'Units',    'normalized',...
+    'Position', [0.4 0.05 0.2 0.05],...
+    'FontName', 'Century Gothic',...
+    'FontWeight', 'bold',...   
+    'FontSize', 10);
+set(handles.button_export, 'callback', {@fcn_label_options, 'export'});
+
+handles.button_apply = uicontrol(...
+    'Parent',   handles.fig,...
+    'Style',    'push',...    
+    'String',   'apply',...
+    'ForegroundColor', 'k',...
+    'Units',    'normalized',...
+    'Position', [0.75 0.05 0.2 0.05],...
+    'FontName', 'Century Gothic',...
+    'FontWeight', 'bold',...   
+    'FontSize', 10);
+set(handles.button_apply, 'callback', {@fcn_label_options, 'apply'});
+
+
+% put the data into the table
+EEG = getappdata(handles.csc_plotter.fig, 'EEG');
+set(handles.table, 'data', EEG.csc_label_data);
+
+% update the GUI handles
+guidata(handles.fig, handles)
+
+function fcn_label_options(object, ~, option)
+% get the handles
+handles = guidata(object);
+
+switch option
+    
+    case 'remove'
+        % make sure labels aren't removed that have events
+        % find minimum event number
+        event_data = fcn_compute_events(handles.csc_plotter);
+        event_max = max([event_data{:, 3}]);
+        
+        label_data = get(handles.table, 'data');
+        
+        if size(label_data, 1) > event_max
+            % get the table, delete the row and reset the table
+            label_data(end, :) = [];
+            set(handles.table, 'data', label_data);
+        else
+            fprintf(1, '\nWarning: cannot delete event label since these events exist in dataset\n\n');
+        end
+               
+    case 'add'
+        % get the table, add a row and reset the table
+        label_data = get(handles.table, 'data');
+        % populate with default
+        label_data{end + 1, 1} = label_data{end, 1} + 1;
+        label_data{end, 2} = ['event ', num2str(label_data{end, 1})];
+        label_data{end, 3} = '-';
+        
+        % put the new data into the viewed table
+        set(handles.table, 'data', label_data);
+        
+    case 'import'
+        % load a label file
+        [file_name, file_path] = uigetfile('*.mat');
+        if ~isempty(file_name)
+            loaded_label_file = load(fullfile(file_path, file_name));
+        else
+            return
+        end
+        
+        % check to make sure file has labels
+        if isfield(loaded_label_file, 'label_data')
+            % check that new labels have sufficient event types
+            event_data = fcn_compute_events(handles.csc_plotter);
+            event_max = max([event_data{:, 3}]);
+            if size(loaded_label_file.label_data, 1) > event_max
+                % set the loaded table
+                set(handles.table, 'data', loaded_label_file.label_data);
+            else
+                fprintf(1, '\nWarning: cannot import event labels since current events exceed labels to import\n\n');
+            end
+        end
+        
+    case 'export'
+        % save the label options to a file
+        % Ask where to put file...
+        [saveFile, savePath] = uiputfile('*.mat');
+        if ~isempty(saveFile)
+            label_data = get(handles.table, 'data');
+            save(fullfile(savePath, saveFile), 'label_data', '-mat');
+        end
+        
+    case 'apply'
+        % apply the new labels to the data...
+        label_data = get(handles.table, 'data');
+
+        % expand the event axis (if necessary)
+        % NOTE: should deleted event labels also be detected and deleted?
+        set(handles.csc_plotter.spike_ax, ...
+            'yLim', [0 size(label_data, 1)]);
+
+        % update basic info
+        handles.csc_plotter.number_of_event_types = ...
+            size(label_data, 1);
+        handles.csc_plotter.valid_event_keys = cellfun(@num2str, ...
+            num2cell(1:handles.csc_plotter.number_of_event_types), ...
+            'uniformoutput', 0);
+        
+        % clear old labels and menu items
+        delete(handles.csc_plotter.selection.item)
+        handles.csc_plotter.selection = rmfield(handles.csc_plotter.selection, 'item');
+
+        % populate the event menu with new labels
+        for n = 1 : size(label_data, 1)
+            handles.csc_plotter.selection.item(n) = uimenu(handles.csc_plotter.selection.menu,...
+                'text', label_data{n, 2}, 'userData', n);
+            set(handles.csc_plotter.selection.item(n),...
+                'callback', {@cb_event_selection, n});
+        end
+        
+        % set the color order
+        if handles.csc_plotter.number_of_event_types > 7
+            set(handles.csc_plotter.main_ax, ...
+                'colorOrder', parula(handles.csc_plotter.number_of_event_types));
+        elseif handles.csc_plotter.number_of_event_types <= 7
+            % set to 7 since those are the normal defaults
+            set(handles.csc_plotter.main_ax, ...
+                'colorOrder', parula(7));
+        end
+        
+        % put into the EEG structure
+        EEG = getappdata(handles.csc_plotter.fig, 'EEG');
+        EEG.csc_label_data = label_data;
+        EEG.csc_event_data = fcn_compute_events(handles.csc_plotter);
+        setappdata(handles.csc_plotter.fig, 'EEG', EEG);
+        
+        % update main figure handles
+        guidata(handles.csc_plotter.fig, handles.csc_plotter);
+        
+        % redraw all the events (since colors likely changed)
+        fcn_redraw_events(handles.csc_plotter.fig, []);
+        
+        % close the labels window
+        close(handles.fig);
+end
+
+
 function fcn_event_browser(object, ~)
 % get the handles
 handles.csc_plotter = guidata(object);
@@ -970,6 +1240,8 @@ jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
 % make the table sortable
 % get the java table from the jscroll
 jtable = jscroll.getViewport.getView;
+% avoid java error ("exception in thread "AWT-EventQueue-0") by waiting...
+pause(0.05); 
 jtable.setSortable(true);
 jtable.setMultiColumnSortable(true);
 
@@ -1133,7 +1405,7 @@ if event_data.Button == 1
     % show event label if left click
     
     % get the event labels
-    all_labels = get(handles.selection.item, 'label');
+    all_labels = get(handles.selection.item, 'text');
 
     % check for existing textbox
     if isfield(handles, 'textbox')
@@ -1174,8 +1446,6 @@ elseif event_data.Button == 3
     % update the GUI handles
     guidata(handles.fig, handles)
 end
-
-
 
 function fcn_redraw_events(object, ~)
 % function to erase all events and redraw their markers based on the

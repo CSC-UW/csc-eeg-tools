@@ -30,6 +30,7 @@ wake_end = find(diff([0, stages == 0 |stages == 6]) == -1);
 if isempty(wake_end) || wake_end(end) < wake_start(end)
     wake_end(end+1) = EEG.pnts;
 end
+
 lights_off = wake_start(1);
 
 % find sleep start
