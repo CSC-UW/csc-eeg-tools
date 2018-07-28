@@ -13,7 +13,6 @@ handles.v_grid_spacing = 1; % vertical grid default spacing (s)
 handles.h_grid_spacing = 75; % horizontal grid default spacing (uV)
 handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
-handles.plotICA = false; % plot components by default
 handles.negative_up = false; % negative up by default (for clinicians)
 handles.number_of_event_types = 6; % how many event types do you want
 
@@ -22,6 +21,8 @@ handles.scoring_mode = false; % sleep scoring off by default
 handles.scoring_window = handles.epoch_length; % how far window scrolls
 handles.scoring_offset = 0; % where (in window) to place event marker
 
+% ICA components options
+handles.plotICA = false; % plot components by default
 handles.component_projection = false; % viewing the difference between the data and remaining ica component projections
 
 % define the default colorscheme to use
@@ -759,7 +760,7 @@ if isfield(EEG, 'csc_label_data') && ~isempty(EEG.csc_label_data)
     % assign correct labels to the context menu
     for n = 1 : handles.number_of_event_types
         handles.selection.item(n) = uimenu(handles.selection.menu,...
-            'text', EEG.csc_label_data{n, 2}, 'userData', n);
+            'label', EEG.csc_label_data{n, 2}, 'userData', n);
         set(handles.selection.item(n),...
             'callback', {@cb_event_selection, n});
     end
@@ -767,7 +768,7 @@ else
     % assign defaults to the context menu
     for n = 1 : handles.number_of_event_types
         handles.selection.item(n) = uimenu(handles.selection.menu,...
-            'text', ['event ', num2str(n)], 'userData', n);
+            'label', ['event ', num2str(n)], 'userData', n);
         set(handles.selection.item(n),...
             'callback',     {@cb_event_selection, n});
     end
@@ -1085,7 +1086,7 @@ switch option
             % check that new labels have sufficient event types
             event_data = fcn_compute_events(handles.csc_plotter);
             event_max = max([event_data{:, 3}]);
-            if size(loaded_label_file.label_data, 1) > event_max
+            if size(loaded_label_file.label_data, 1) >= event_max
                 % set the loaded table
                 set(handles.table, 'data', loaded_label_file.label_data);
             else
@@ -1155,7 +1156,6 @@ switch option
         % close the labels window
         close(handles.fig);
 end
-
 
 function fcn_event_browser(object, ~)
 % get the handles
