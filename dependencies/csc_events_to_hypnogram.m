@@ -113,7 +113,7 @@ EEG.swa_scoring.stages = stages;
 if flag_type == 0
     table_data = csc_sleep_statistics(EEG, flag_mode);
 else
-    table_data = swa_sleep_statistics(EEG, 0, 'deutsch', flag_mode);
+    table_data = swa_sleep_statistics(EEG, 0, 'english', flag_mode);
 end
 
 % plot classic hypnogram and stage pie chart

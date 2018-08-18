@@ -775,7 +775,7 @@ else
     % create csc_label_data
     EEG.csc_label_data = cell(handles.number_of_event_types, 3);
     EEG.csc_label_data(:, 1) = num2cell(1 : handles.number_of_event_types);
-    EEG.csc_label_data(:, 2) = {handles.selection.item.Text};
+    EEG.csc_label_data(:, 2) = {handles.selection.item.Label};
     % TODO: include color selector for event types
     EEG.csc_label_data(:, 3) = {'-'};
 end
@@ -1126,7 +1126,7 @@ switch option
         % populate the event menu with new labels
         for n = 1 : size(label_data, 1)
             handles.csc_plotter.selection.item(n) = uimenu(handles.csc_plotter.selection.menu,...
-                'text', label_data{n, 2}, 'userData', n);
+                'label', label_data{n, 2}, 'userData', n);
             set(handles.csc_plotter.selection.item(n),...
                 'callback', {@cb_event_selection, n});
         end
@@ -1405,7 +1405,7 @@ if event_data.Button == 1
     % show event label if left click
     
     % get the event labels
-    all_labels = get(handles.selection.item, 'text');
+    all_labels = get(handles.selection.item, 'label');
 
     % check for existing textbox
     if isfield(handles, 'textbox')
