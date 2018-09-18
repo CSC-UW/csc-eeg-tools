@@ -15,6 +15,8 @@ handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
 handles.negative_up = false; % negative up by default (for clinicians)
 handles.number_of_event_types = 6; % how many event types do you want
+handles.flag_java = false; % enable undocumented java functions to make things look prettier
+
 
 % sleep scoring options
 handles.scoring_mode = false; % sleep scoring off by default
@@ -955,8 +957,10 @@ handles.table = uitable(...
 
 % get the underlying java properties
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-jscroll = findjobj(handles.table);
-jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
+if handles.flag_java
+    jscroll = findjobj(handles.table);
+    jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
+end
 
 % make the table sortable
 % get the java table from the jscroll
@@ -1234,8 +1238,10 @@ handles.save_button = uicontrol(...
 set(handles.save_button, 'callback', {@pb_event_option, 'save'});
 
 % get the underlying java properties
-jscroll = findjobj(handles.table);
-jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
+if handles.flag_java
+    jscroll = findjobj(handles.table);
+    jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
+end
 
 % make the table sortable
 % get the java table from the jscroll
@@ -2135,9 +2141,11 @@ data(:, 4) = {'d'};
 set(handles.table, 'Data', data);
 
 % automatically adjust the column width using java handle
-jscroll = findjobj(handles.table);
-jtable  = jscroll.getViewport.getView;
-jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+if handles.flag_java
+    jscroll = findjobj(handles.table);
+    jtable  = jscroll.getViewport.getView;
+    jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+end
 
 % create the save button
 handles.apply_filters = uicontrol(...
@@ -2263,9 +2271,11 @@ handles.table = uitable(...
     'columnEditable', [true, true, true, true, true]);
 
 % automatically adjust the column width using java handle
-jscroll = findjobj(handles.table);
-jtable  = jscroll.getViewport.getView;
-jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+if handles.csc_plotter.flag_java
+    jscroll = findjobj(handles.table);
+    jtable  = jscroll.getViewport.getView;
+    jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+end
 
 % create the reference list text
 handles.reference_text = uicontrol(...
@@ -2280,9 +2290,11 @@ handles.reference_text = uicontrol(...
     'foregroundColor', handles.csc_plotter.colorscheme.fg_col_2, ...
     'fontName',     'Century Gothic', ...
     'fontSize',     8);
-handles.java.reference_text = findjobj(handles.reference_text); 
-handles.java.reference_text.setVerticalAlignment(javax.swing.SwingConstants.CENTER);
-    
+if handles.csc_plotter.flag_java
+    handles.java.reference_text = findjobj(handles.reference_text);
+    handles.java.reference_text.setVerticalAlignment(javax.swing.SwingConstants.CENTER);
+end
+
 % create reference drop down menu
 reference_list = {'inherent', 'custom', 'average'};
 handles.reference_list = uicontrol(     ...
