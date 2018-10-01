@@ -15,7 +15,7 @@ handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
 handles.negative_up = false; % negative up by default (for clinicians)
 handles.number_of_event_types = 6; % how many event types do you want
-handles.flag_java = false; % enable undocumented java functions to make things look prettier
+handles.flag_java = true; % enable undocumented java functions to make things look prettier
 
 
 % sleep scoring options
@@ -112,7 +112,7 @@ handles.menu.montage = uimenu(handles.fig, 'label', 'montage', 'enable', 'off');
 % events menu
 handles.menu.events = uimenu(handles.fig, 'label', 'events');
 handles.menu.event_list = uimenu(handles.menu.events, 'label', 'event list');
-handles.menu.event_labels = uimenu(handles.menu.events, 'label', 'event labels');
+handles.menu.event_labels = uimenu(handles.menu.events, 'label', 'event labels', 'enable', 'off');
 set(handles.menu.event_list, 'callback', {@fcn_event_browser});
 set(handles.menu.event_labels, 'callback', {@fcn_event_labels});
 
@@ -957,21 +957,23 @@ handles.table = uitable(...
 
 % get the underlying java properties
 % ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if handles.flag_java
+if handles.csc_plotter.flag_java
     jscroll = findjobj(handles.table);
     jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
 end
 
 % make the table sortable
-% get the java table from the jscroll
-jtable = jscroll.getViewport.getView;
-% avoid java error ("exception in thread "AWT-EventQueue-0") by waiting...
-pause(0.05); 
-jtable.setSortable(true);
-jtable.setMultiColumnSortable(true);
-
-% auto-adjust the column width
-jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+if handles.csc_plotter.flag_java
+    % get the java table from the jscroll
+    jtable = jscroll.getViewport.getView;
+    % avoid java error ("exception in thread "AWT-EventQueue-0") by waiting...
+    pause(0.05);
+    jtable.setSortable(true);
+    jtable.setMultiColumnSortable(true);
+    
+    % auto-adjust the column width
+    jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
+end
 
 % create the buttons
 handles.button_remove = uicontrol(...
@@ -1238,21 +1240,21 @@ handles.save_button = uicontrol(...
 set(handles.save_button, 'callback', {@pb_event_option, 'save'});
 
 % get the underlying java properties
-if handles.flag_java
+if handles.csc_plotter.flag_java
     jscroll = findjobj(handles.table);
     jscroll.setVerticalScrollBarPolicy(jscroll.java.VERTICAL_SCROLLBAR_ALWAYS);
+    
+    % make the table sortable
+    % get the java table from the jscroll
+    jtable = jscroll.getViewport.getView;
+    % avoid java error ("exception in thread "AWT-EventQueue-0") by waiting...
+    pause(0.05);
+    jtable.setSortable(true);
+    jtable.setMultiColumnSortable(true);
+    
+    % auto-adjust the column width
+    jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
 end
-
-% make the table sortable
-% get the java table from the jscroll
-jtable = jscroll.getViewport.getView;
-% avoid java error ("exception in thread "AWT-EventQueue-0") by waiting...
-pause(0.05); 
-jtable.setSortable(true);
-jtable.setMultiColumnSortable(true);
-
-% auto-adjust the column width
-jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
 
 % set the callback for table cell selection
 set(handles.table, 'cellSelectionCallback', {@cb_select_table});
@@ -1351,6 +1353,7 @@ event_colors = get(handles.main_ax, 'ColorOrder');
 % check if its the first item
 if ~isfield(handles, 'events')
    handles.events = [];
+   set(handles.menu.event_labels, 'enable', 'on');
 end
 
 % check if event latency is pre-specified
@@ -1568,6 +1571,9 @@ switch option
             
             % re-draw the event window in main
             fcn_redraw_events(handles.csc_plotter.fig, []);
+            
+            % enable label editing
+            set(handles.menu.event_labels, 'enable', 'on');
             
         else
             % TODO: event error message
@@ -2141,7 +2147,7 @@ data(:, 4) = {'d'};
 set(handles.table, 'Data', data);
 
 % automatically adjust the column width using java handle
-if handles.flag_java
+if handles.csc_plotter.flag_java
     jscroll = findjobj(handles.table);
     jtable  = jscroll.getViewport.getView;
     jtable.setAutoResizeMode(jtable.AUTO_RESIZE_ALL_COLUMNS);
