@@ -1,5 +1,8 @@
 function EEG = csc_ecg_removal(EEG, eeg_channels, ecg_channel, flag_plot)
 % exploration of using ecg channel to directly remove the artefact from eeg
+% EEG = csc_ecg_removal(EEG, [3:10], 13, 1);
+% warning: you may have to manual switch polarity:
+% 
 
 if nargin < 4
     flag_plot = true;
