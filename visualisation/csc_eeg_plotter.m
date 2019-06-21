@@ -2,8 +2,7 @@ function EEG = csc_eeg_plotter(varargin)
 % visualisation and event editor for time series data
 % Author: Armand Mensen
 
-% TODO:
-% Fix ugly default setting style (e.g. handles.options...)    
+% TODO: fix spaghetti default setting style (e.g. handles.options...)    
 
 % declare defaults
 handles.filter_options = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bands
@@ -14,7 +13,10 @@ handles.h_grid_spacing = 75; % horizontal grid default spacing (uV)
 handles.plot_hgrid = 1; % plot the horizontal grid
 handles.plot_vgrid = 1; % plot the vertical grid
 handles.negative_up = false; % negative up by default (for clinicians)
+
 handles.number_of_event_types = 6; % how many event types do you want
+handles.flag_channel_events = false; % record/show the channel label of the event
+
 handles.flag_java = true; % enable undocumented java functions to make things look prettier
 
 
@@ -1263,7 +1265,11 @@ set(handles.table, 'cellSelectionCallback', {@cb_select_table});
 event_data = fcn_compute_events(handles.csc_plotter);
 
 % put the data into the table
-set(handles.table, 'data', event_data);
+if handles.csc_plotter.flag_channel_events
+    set(handles.table, 'data', event_data);
+else
+    set(handles.table, 'data', event_data(:, [1:3]));
+end
 
 % update the GUI handles
 guidata(handles.fig, handles)
@@ -1284,20 +1290,21 @@ if no_events == 0
 end
 
 % pre-allocate the event data
-event_data = cell(sum(no_events), 3);
+event_data = cell(sum(no_events), 4);
 
 % insert latencies and event type
 if size(events, 1) == 1
     % single handles return a double not a cell
-    event_data(:, 2) = {get(events(:,1), 'xdata')};
-    event_data(:, 3) = {get(events(:,1), 'userData')};
+    event_data(:, 2) = {get(events(:, 1), 'xdata')}; % event time (s)
+    event_data(:, 3) = {get(events(:, 1), 'userData')}; % event number
+    event_data(:, 4) = {get(events(:, 2), 'userData')}; % channel label
 else
-    event_data(:, 2) = get(events(:,1), 'xdata');
-    event_data(:, 3) = get(events(:,1), 'userData');
+    event_data(:, 2) = get(events(:, 1), 'xdata');
+    event_data(:, 3) = get(events(:, 1), 'userData');
+    event_data(:, 4) = get(events(:, 2), 'userData');
 end
 
 % insert event labels
-% NOTE: no one ever changes the event labels from default so this might be deletable
 all_labels = get(handles.selection.item, 'label');
 event_data(:, 1) = {all_labels{[event_data{:, 3}]}};
 
@@ -1339,7 +1346,10 @@ set(handles.csc_plotter.cPoint, 'Value', selected_sample);
 % update the time in the plotter window
 fcn_change_time(handles.csc_plotter.fig, []);
 
-function cb_event_selection(object, ~, event_type, current_point)
+function cb_event_selection(object, ~, event_type, current_point, channel_label)
+% creates an event by drawing markers (triangles) based on position of the mouse
+% optional: "current_point" can be defined explicitly and mouse position is ignored
+
 % TODO: small box at the top to indicate the last marker event
 
 % get the handles
@@ -1360,25 +1370,29 @@ end
 if nargin < 4
     current_point = get(handles.main_ax, 'currentPoint');
 end
+if nargin < 5
+    channel_label = 'all';
+end
 
 % mark the main axes
 % ~~~~~~~~~~~~~~~~~~
 x = current_point(1);
-y = get(handles.main_ax, 'ylim');
+y_limits = get(handles.main_ax, 'ylim');
 
-% draw bottom triangle
-handles.events(end+1, 1) = plot(x, 0,...
-    'lineStyle', 'none',...
-    'marker', '^',...
-    'markerSize', 20,...
-    'markerEdgeColor', [0.9, 0.9, 0.9],...
-    'markerFaceColor', event_colors(event_type, :),...
-    'userData', event_type,...
-    'parent', handles.ax_lower_event,...
-    'buttonDownFcn', {@bdf_event_marker});
+% determine the nearest plotted channel
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+% FIX: somehow the nargin is never < 4???
+if numel(current_point) > 1
+    y = current_point(1,2);
+    scale = get(handles.txt_scale, 'value') *-1;
+    channel_positions = [1:handles.n_disp_chans]' * scale;
+    [~, closest_channel] = min(abs(y - channel_positions));
+    channel_label = get(handles.labels(closest_channel), 'string');
+end
+
 
 % draw top triangle
-handles.events(end, 2) = plot(x, y(2),...
+handles.events(end+1, 1) = plot(x, y_limits(2),...
     'lineStyle', 'none',...
     'marker', 'v',...
     'markerSize', 20,...
@@ -1387,6 +1401,19 @@ handles.events(end, 2) = plot(x, y(2),...
     'userData', event_type,...
     'parent', handles.main_ax,...
     'buttonDownFcn', {@bdf_event_marker});
+
+% draw bottom triangle
+% NOTE: bottom triangle contains the channel label closest to the click
+handles.events(end, 2) = plot(x, 0,...
+    'lineStyle', 'none',...
+    'marker', '^',...
+    'markerSize', 20,...
+    'markerEdgeColor', [0.9, 0.9, 0.9],...
+    'markerFaceColor', event_colors(event_type, :),...
+    'userData', channel_label,...
+    'parent', handles.ax_lower_event,...
+    'buttonDownFcn', {@bdf_event_marker});
+
 
 % mark the spike axes
 % ~~~~~~~~~~~~~~~~~~~
@@ -1410,22 +1437,30 @@ handles = guidata(object);
 % calculate the event number (which row is the object handle in)
 event_number = any(object == handles.events, 2);
 
-if event_data.Button == 1   
-    % show event label if left click
+if event_data.Button == 1
+    % show event label if top triangle clicked
+    % show event channel label if bottom triangle clicked (and mode enabled)
     
-    % get the event labels
-    all_labels = get(handles.selection.item, 'label');
-
+    % define text to show in box
+    if object.Marker == '^' && handles.flag_channel_events % bottom triangle
+        string_to_show = ['channel label: ', object.UserData];
+    elseif object.Marker == 'v'  % top triangle
+        all_labels = get(handles.selection.item, 'label');
+        string_to_show = all_labels{object.UserData};
+    else
+        string_to_show = 'on all channels';
+    end
+    
     % check for existing textbox
     if isfield(handles, 'textbox')
         set(handles.textbox, ...
-            'string', all_labels{object.UserData});
+            'string', string_to_show);
     else
         % create a textbox
         box_location = [0.5, 0.6, 0, 0];
         handles.textbox = annotation(...
             'textbox', box_location, ...
-            'string', all_labels{object.UserData}, ...
+            'string', string_to_show, ...
             'fitBoxToText','on', ...
             'horizontalAlignment', 'center', ...
             'fontSize', 20, ...
@@ -1478,7 +1513,12 @@ guidata(handles.fig, handles)
 
 % loop through each event
 for n = 1 : size(EEG.csc_event_data, 1)
-    cb_event_selection(object, [], EEG.csc_event_data{n, 3}, EEG.csc_event_data{n, 2})
+    % accomodate events marked for individual channels
+    if size(EEG.csc_event_data, 2) == 3
+        cb_event_selection(object, [], EEG.csc_event_data{n, 3}, EEG.csc_event_data{n, 2})
+    else
+        cb_event_selection(object, [], EEG.csc_event_data{n, 3}, EEG.csc_event_data{n, 2}, EEG.csc_event_data{n, 4})
+    end
 end
 
 function fcn_plot_trial_borders(object, ~)
@@ -1573,7 +1613,7 @@ switch option
             fcn_redraw_events(handles.csc_plotter.fig, []);
             
             % enable label editing
-            set(handles.menu.event_labels, 'enable', 'on');
+            set(handles.csc_plotter.menu.event_labels, 'enable', 'on');
             
         else
             % TODO: event error message
