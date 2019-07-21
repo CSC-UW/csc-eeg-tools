@@ -209,6 +209,7 @@ set(handles.menu.montage,   'callback', {@fcn_montage_setup});
 set(handles.fig,...
     'KeyPressFcn', {@cb_key_pressed,});
 
+
 % put update axes function handles in handles
 handles.update_axes = @update_main_plot;
 
@@ -2103,15 +2104,21 @@ if isempty(event.Modifier)
                         event_latencies = [];
                     elseif size(handles.events, 1) == 1
                         % if there is only 1 event doesn't return a cell
-                        event_latencies = floor(get(handles.events(:, 1), 'xdata'));
+                        event_latencies = floor(get(handles.events(:, 1), 'xdata')*10)/10;
                     else
-                        event_latencies = floor(cell2mat(get(handles.events(:, 1), 'xdata')));
+                        % round to the nearest 0.1 seconds
+                        event_latencies = floor(cell2mat(get(handles.events(:, 1), 'xdata'))*10)/10;
                     end
                     
                     if any(event_latencies == [current_point + handles.scoring_offset])
                         % replace that event with new label
                         event_number = ...
                             find(event_latencies == [current_point + handles.scoring_offset]);
+                        
+                        % check if multiple events correspond (second event (e.g. arousal) marked very close to stage marker
+                        if length(event_number) > 1
+                            event_number = event_number(1);
+                        end
                         
                         % get color scheme
                         event_colors = get(handles.main_ax, 'ColorOrder');
@@ -2130,7 +2137,7 @@ if isempty(event.Modifier)
                             event_colors(event_type, :));
                         
                     else
-                        % new event
+                        % new event (i.e. no previous scoring marker)
                         % set the appropriate marker at the start of the window
                         cb_event_selection(object, [],...
                             str2double(event.Character), ...
