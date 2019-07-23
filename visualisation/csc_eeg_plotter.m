@@ -1,29 +1,19 @@
-function EEG = csc_eeg_plotter(varargin)
-% visualisation and event editor for time series data
+function EEG = csc_eeg_plotter(EEG, varargin)
+% visualisation and event editor for time series data (EEGLAB format)
 % Author: Armand Mensen
+% See history and documentation at https://github.com/CSC-UW/csc-eeg-tools
 
-% TODO: fix spaghetti default setting style (e.g. handles.options...)    
+% import the default settings and process the input arguments
+% change the default settings by editing this function
+handles.settings = csc_get_plotter_defaults(varargin{:});
+% TODO: add options to automatically load montages
 
-% declare defaults
-handles.filter_options = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bands
-handles.epoch_length = 30; % default viewing window
-handles.n_disp_chans = 12; % number of initial channels to display
-handles.v_grid_spacing = 1; % vertical grid default spacing (s)
-handles.h_grid_spacing = 75; % horizontal grid default spacing (uV)
-handles.plot_hgrid = 1; % plot the horizontal grid
-handles.plot_vgrid = 1; % plot the vertical grid
-handles.negative_up = false; % negative up by default (for clinicians)
+% TODO: incorporate more defaults
+handles.settings.filter_options = [0.7 40; 10 40; 0.3 10; 0.1 10]; % default filter bands
 
-handles.number_of_event_types = 6; % how many event types do you want
+% handles.settings.event_number_of_types = 6; % how many event types do you want
 handles.flag_channel_events = false; % record/show the channel label of the event
-
 handles.flag_java = true; % enable undocumented java functions to make things look prettier
-
-
-% sleep scoring options
-handles.scoring_mode = false; % sleep scoring off by default
-handles.scoring_window = handles.epoch_length; % how far window scrolls
-handles.scoring_offset = 0; % where (in window) to place event marker
 
 % ICA components options
 handles.plotICA = false; % plot components by default
@@ -39,7 +29,7 @@ handles.colorscheme = struct(...
     'bg_col_3',     [0.15, 0.15, 0.15] );
 
 % Set initial display channels
-handles.disp_chans = [1 : handles.n_disp_chans];
+handles.disp_chans = [1 : handles.settings.n_disp_chans];
 
 % Undisplayed channels are off the plot entirely. Hidden channels reserve space
 % on the plot, but are invisible. 
@@ -76,7 +66,7 @@ handles.main_ax = axes(...
 handles.spike_ax = axes(...
     'parent',       handles.fig             ,...
     'position',     [0.025 0.05, 0.95, 0.1] ,...
-    'ylim',         [0, handles.number_of_event_types], ... % events are indicated by vertical position
+    'ylim',         [0, handles.settings.event_number_of_types], ... % events are indicated by vertical position
     'ydir',         'reverse'               , ... 
     'nextPlot',     'add'                   ,...
     'color',        handles.colorscheme.bg_col_2 ,...
@@ -159,7 +149,7 @@ handles.menu.disp_chans = uimenu(handles.menu.view,...
     'label', 'display channels',...
     'accelerator', 'd', ...
     'callback', {@fcn_options, 'disp_chans'});
-handles.menu.epoch_length = uimenu(handles.menu.view,...
+handles.menu.settings.epoch_length = uimenu(handles.menu.view,...
     'label', 'epoch length',...
     'accelerator', 'e',...
     'callback', {@fcn_options, 'epoch_length'});
@@ -167,11 +157,11 @@ handles.menu.colorscheme = uimenu(handles.menu.view ,...
     'label', 'color scheme', ...
     'callback', {@fcn_options, 'color_scheme'});
 handles.menu.hgrid_spacing = uimenu(handles.menu.view ,...
-    'label', 'horizontal grid', ...
+    'label', 'set horizontal grid', ...
     'accelerator', 'h' ,...
     'callback', {@fcn_options, 'hgrid_spacing'});
 handles.menu.vgrid_spacing = uimenu(handles.menu.view ,...
-    'label', 'vertical grid', ...
+    'label', 'set vertical grid', ...
     'accelerator', 'g' ,...
     'callback', {@fcn_options, 'vgrid_spacing'});
 handles.menu.negative_toggle = uimenu(handles.menu.view,...
@@ -217,14 +207,11 @@ handles.update_axes = @update_main_plot;
 guidata(handles.fig, handles)
 
 % Look for input arguments
-switch nargin
-    case 0
-        % wait for user input
-    case 1
-        
-        % get the EEG from the input
-        EEG = varargin{1};
-        
+if isempty(EEG)
+    % wait for user input
+else   
+    
+    if isstruct(EEG)        
         % check for previously epoched data
         if EEG.trials > 1
             % flatten the third dimension into the second
@@ -233,7 +220,7 @@ switch nargin
             setappdata(handles.fig, 'eegData', eegData);
             
             % change the epoch length to match trial length by default
-            handles.epoch_length = EEG.pnts / EEG.srate;
+            handles.settings.epoch_length = EEG.pnts / EEG.srate;
             
         else
             eegData = EEG.data;
@@ -256,8 +243,7 @@ switch nargin
         % draw trial borders on the main axes
         fcn_plot_trial_borders(handles.fig)
         
-    otherwise
-        error('Either 0 or 1 arguments expected.');
+    end
 end
 
 % if an output is expected, wait for the figure to close
@@ -269,20 +255,21 @@ if nargout > 0
     
     % get the metadata
     EEG = getappdata(handles.fig, 'EEG');
-
-    % add the event table to the EEG struct
-    if isfield(handles, 'events')
-        EEG.csc_event_data = fcn_compute_events(handles);
+    
+    if ~isempty(EEG)
+        % add the event table to the EEG struct
+        if isfield(handles, 'events')
+            EEG.csc_event_data = fcn_compute_events(handles);
+        end
+        
+        % just add the hidden channels and trials to the data
+        EEG.marked_trials = handles.trials;
+        % TODO: won't work with different montages just yet
+        EEG.hidden_channels = handles.hidden_chans;
     end
-        
-    % just add the hidden channels and trials to the data
-    EEG.marked_trials = handles.trials;
-    % TODO: won't work with different montages just yet
-    EEG.hidden_channels = handles.hidden_chans;
-        
+   
     % close the figure
     delete(handles.fig);
-    
 else
     % return an empty variable
     EEG = [];
@@ -377,7 +364,7 @@ EEG = getappdata(handles.fig, 'EEG');
 % select the plotting data
 current_point = get(handles.cPoint, 'value');
 range = current_point : ...
-    current_point + handles.epoch_length * EEG.srate - 1;
+    current_point + handles.settings.epoch_length * EEG.srate - 1;
 
 % check for ica flag plot and get if there
 if handles.plotICA == 1
@@ -422,7 +409,7 @@ else % normal plotting of activity
             % calculate the average activity
             mean_activity = mean(eegData(EEG.csc_montage.channels(:, 1), :), 1);
             data_to_plot = eegData(EEG.csc_montage.channels(handles.disp_chans, 1), range)...
-                - ones(handles.n_disp_chans, 1) * mean_activity(:, range);
+                - ones(handles.settings.n_disp_chans, 1) * mean_activity(:, range);
     end
     
     % add the scaling to the channels
@@ -430,7 +417,7 @@ else % normal plotting of activity
         [EEG.csc_montage.scaling(handles.disp_chans, 1) * ones(1, length(range))];
     
     % reverse data is negative up option is checked
-    if handles.negative_up
+    if handles.settings.negative_up
         data_to_plot = data_to_plot * -1;
     end
 end
@@ -441,7 +428,8 @@ end
 if strcmp(get(handles.menu.filter_toggle, 'checked'), 'on') ...
         && handles.plotICA == 0
     
-    % calculate and filter separately for each channel type
+    % calculate and filter separately for each channel type 
+    % currently 4 types of data (EEG, EMG, EOG, other)
     for n = 1 : 4
         
         % which channels to apply this to
@@ -454,19 +442,19 @@ if strcmp(get(handles.menu.filter_toggle, 'checked'), 'on') ...
         
         % determine filtering parameters
         % check for empty boxes for one-sided filters
-        if isnan(handles.filter_options(n, 2))
+        if isnan(handles.settings.filter_options(n, 2))
             
             [filt_param_b, filt_param_a] = butter(2, ...
-                handles.filter_options(n, 1) / (EEG.srate / 2), 'high');
+                handles.settings.filter_options(n, 1) / (EEG.srate / 2), 'high');
             
-        elseif isnan(handles.filter_options(1))
+        elseif isnan(handles.settings.filter_options(1))
             
             [filt_param_b, filt_param_a] = butter(2, ...
-                handles.filter_options(n, 2) / (EEG.srate / 2), 'low');
+                handles.settings.filter_options(n, 2) / (EEG.srate / 2), 'low');
         else
             [filt_param_b, filt_param_a] = ...
-                butter(2,[handles.filter_options(n, 1)/(EEG.srate/2),...
-                handles.filter_options(n, 2) / (EEG.srate / 2)]);
+                butter(2,[handles.settings.filter_options(n, 1)/(EEG.srate/2),...
+                handles.settings.filter_options(n, 2) / (EEG.srate / 2)]);
         end
         
         % apply the filter to the data window
@@ -478,14 +466,14 @@ end
 
 % define accurate spacing
 scale = get(handles.txt_scale, 'value')*-1;
-toAdd = [1:handles.n_disp_chans]'*scale;
+toAdd = [1:handles.settings.n_disp_chans]'*scale;
 toAdd = toAdd * ones(1, length(range));
 
 % space out the data for the single plot
 data_to_plot = data_to_plot + toAdd;
 
 set([handles.main_ax, handles.name_ax],...
-    'yLim', [scale 0] * (handles.n_disp_chans + 1 ))
+    'yLim', [scale 0] * (handles.settings.n_disp_chans + 1 ))
 
 % calculate the time in seconds
 time = range/EEG.srate;
@@ -502,9 +490,9 @@ end
 % grid plotting
 % ^^^^^^^^^^^^^
 % plot vertical gridlines
-if handles.plot_vgrid && ~isfield(handles, 'v_gridlines')
+if handles.settings.plot_v_grid && ~isfield(handles, 'v_gridlines')
     % plot the line if wished and there wasn't one there already
-    inttimes = time(~mod(time, handles.v_grid_spacing)); % find all integer times
+    inttimes = time(~mod(time, handles.settings.v_grid_spacing)); % find all integer times
     gridtimes = repmat(inttimes, 2, 1);
     ylims = get(handles.main_ax, 'ylim');
     gridlims = repmat(ylims, length(inttimes), 1)';
@@ -513,22 +501,22 @@ if handles.plot_vgrid && ~isfield(handles, 'v_gridlines')
         'color',      handles.colorscheme.fg_col_3,...
         'parent',     handles.main_ax);
     
-elseif handles.plot_vgrid && isfield(handles, 'v_gridlines')
+elseif handles.settings.plot_v_grid && isfield(handles, 'v_gridlines')
     % just update the time if line is there
-    inttimes = time(~mod(time, handles.v_grid_spacing)); % find all integer times
+    inttimes = time(~mod(time, handles.settings.v_grid_spacing)); % find all integer times
     gridtimes = repmat(inttimes, 2, 1);
     set(handles.v_gridlines, {'xdata'}, num2cell(gridtimes, 1)');
     
-elseif ~handles.plot_vgrid && isfield(handles, 'v_gridlines')
+elseif ~handles.settings.plot_v_grid && isfield(handles, 'v_gridlines')
     % get rid of the line if turned off
     delete(handles.v_gridlines);
     handles = rmfield(handles, 'v_gridlines');
 end
 
 % plot horizontal gridlines
-if handles.plot_hgrid && ~isfield(handles, 'h_gridlines')
+if handles.settings.plot_h_grid && ~isfield(handles, 'h_gridlines')
     % adjust the spacing based on scaling factors
-    grid_spacing = [handles.h_grid_spacing/2 .* ...
+    grid_spacing = [handles.settings.h_grid_spacing/2 .* ...
         EEG.csc_montage.scaling(handles.disp_chans, 1)] * ones(1, length(range));
     grid_lines =  [toAdd - grid_spacing; toAdd + grid_spacing];
     % plot the lines
@@ -537,11 +525,11 @@ if handles.plot_hgrid && ~isfield(handles, 'h_gridlines')
         'color', handles.colorscheme.fg_col_3,...
         'parent', handles.main_ax);
     
-elseif handles.plot_hgrid && isfield(handles, 'h_gridlines')
+elseif handles.settings.plot_h_grid && isfield(handles, 'h_gridlines')
     % just update the time if line is there
     set(handles.h_gridlines, 'xdata', time);
     
-elseif ~handles.plot_hgrid && isfield(handles, 'h_gridlines')
+elseif ~handles.settings.plot_h_grid && isfield(handles, 'h_gridlines')
     % get rid of the line if turned off
     delete(handles.h_gridlines);
     handles = rmfield(handles, 'h_gridlines');
@@ -583,9 +571,9 @@ if flag_replot
         delete(handles.labels);
         handles = rmfield(handles, 'labels');
     end
-    handles.labels = zeros(handles.n_disp_chans, 1);
+    handles.labels = zeros(handles.settings.n_disp_chans, 1);
     % loop for each label
-    for n = 1 : handles.n_disp_chans
+    for n = 1 : handles.settings.n_disp_chans
         chn = handles.disp_chans(n);
         handles.labels(n) = ...
             text(0.25, toAdd(n, 1) + scale / 5, EEG.csc_montage.label_channels{chn},...
@@ -613,7 +601,7 @@ end
 
 % add indicator line to lower plot
 if ~isfield(handles, 'indicator')
-    handles.indicator = line([range(1), range(1)], [0, handles.number_of_event_types], ...
+    handles.indicator = line([range(1), range(1)], [0, handles.settings.event_number_of_types], ...
         'color', handles.colorscheme.fg_col_2,...
         'linewidth', 4,...
         'parent', handles.spike_ax,...
@@ -639,10 +627,10 @@ current_point = get(handles.cPoint, 'value');
 if current_point < 1
     fprintf(1, 'This is the first sample \n');
     set(handles.cPoint, 'value', 1);
-elseif current_point > number_samples - handles.epoch_length * EEG.srate
+elseif current_point > number_samples - handles.settings.epoch_length * EEG.srate
     fprintf(1, 'No more data \n');
     set(handles.cPoint,...
-        'value', number_samples - handles.epoch_length * EEG.srate );
+        'value', number_samples - handles.settings.epoch_length * EEG.srate );
 end
 current_point = get(handles.cPoint, 'value');
 
@@ -694,7 +682,7 @@ handles = guidata(object);
 clicked_position = get(handles.spike_ax, 'currentPoint');
 
 % if scoring mode is enabled align to scoring trace
-if handles.scoring_mode
+if handles.settings.scoring_mode
     % Get the EEG from the figure's appdata
     EEG = getappdata(handles.fig, 'EEG');
     
@@ -748,8 +736,8 @@ end
 % ~~~~~~~~~~~~~~~~
 if isfield(EEG, 'csc_event_data') && ~isempty(EEG.csc_event_data)
     
-    % adjust number of events (minimum 6)
-    handles.number_of_event_types = max(6, max([EEG.csc_event_data{:, 3}]));
+    % adjust number of events
+    handles.settings.event_number_of_types = max(handles.settings.event_number_of_types, max([EEG.csc_event_data{:, 3}]));
     
     % check for later event than the length of the data
     if max([EEG.csc_event_data{:, 2}]) > EEG.xmax
@@ -761,11 +749,9 @@ end
 
 % check event labels
 % ~~~~~~~~~~~~~~~~~~
-if isfield(EEG, 'csc_label_data') && ~isempty(EEG.csc_label_data)
-    % set number of events
-    handles.number_of_event_types = EEG.csc_label_data{end, 1};
+if isfield(EEG, 'csc_label_data') && ~isempty(EEG.csc_label_data)    
     % assign correct labels to the context menu
-    for n = 1 : handles.number_of_event_types
+    for n = 1 : handles.settings.event_number_of_types
         handles.selection.item(n) = uimenu(handles.selection.menu,...
             'label', EEG.csc_label_data{n, 2}, 'userData', n);
         set(handles.selection.item(n),...
@@ -773,15 +759,15 @@ if isfield(EEG, 'csc_label_data') && ~isempty(EEG.csc_label_data)
     end
 else
     % assign defaults to the context menu
-    for n = 1 : handles.number_of_event_types
+    for n = 1 : handles.settings.event_number_of_types
         handles.selection.item(n) = uimenu(handles.selection.menu,...
             'label', ['event ', num2str(n)], 'userData', n);
         set(handles.selection.item(n),...
             'callback',     {@cb_event_selection, n});
     end
     % create csc_label_data
-    EEG.csc_label_data = cell(handles.number_of_event_types, 3);
-    EEG.csc_label_data(:, 1) = num2cell(1 : handles.number_of_event_types);
+    EEG.csc_label_data = cell(handles.settings.event_number_of_types, 3);
+    EEG.csc_label_data(:, 1) = num2cell(1 : handles.settings.event_number_of_types);
     EEG.csc_label_data(:, 2) = {handles.selection.item.Label};
     % TODO: include color selector for event types
     EEG.csc_label_data(:, 3) = {'-'};
@@ -789,17 +775,17 @@ end
 
 % adjust spike ax for number of events
 set(handles.spike_ax, ...
-    'yLim', [0 handles.number_of_event_types]);
+    'yLim', [0 handles.settings.event_number_of_types]);
         
 % create cell array of the valid numbers for keyboard shortcuts
 handles.valid_event_keys = cellfun(@num2str, ...
-    num2cell(1:handles.number_of_event_types), ...
+    num2cell(1:handles.settings.event_number_of_types), ...
     'uniformoutput', 0);
 
 % set the color order
-if handles.number_of_event_types > 7
+if handles.settings.event_number_of_types > 7
     set(handles.main_ax, ...
-        'colorOrder', parula(handles.number_of_event_types));
+        'colorOrder', parula(handles.settings.event_number_of_types));
 end
 
 % check for previous montage options
@@ -845,9 +831,9 @@ for n = 1 : 4
 end
              
 % check that the montage has enough channels to display
-if length(EEG.csc_montage.label_channels) < handles.n_disp_chans
-    handles.n_disp_chans = length(EEG.csc_montage.label_channels);
-    handles.disp_chans = [1 : handles.n_disp_chans];
+if length(EEG.csc_montage.label_channels) < handles.settings.n_disp_chans
+    handles.settings.n_disp_chans = length(EEG.csc_montage.label_channels);
+    handles.disp_chans = [1 : handles.settings.n_disp_chans];
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
@@ -890,8 +876,8 @@ end
 set(handles.txt_scale, 'value', channel_variance * 3);
 
 % check the data length
-if EEG.pnts / EEG.srate < handles.epoch_length
-    handles.epoch_length = floor(EEG.pnts / EEG.srate);
+if EEG.pnts / EEG.srate < handles.settings.epoch_length
+    handles.settings.epoch_length = floor(EEG.pnts / EEG.srate);
 end
 
 % look for already hidden channels
@@ -917,6 +903,7 @@ function fcn_close_window(object, ~)
 % just resume the ui if the figure is closed
 handles = guidata(object);
 
+
 % get current figure status
 current_status = get(handles.fig, 'waitstatus');
 
@@ -932,6 +919,7 @@ switch current_status
     otherwise
         % close the figure
         delete(handles.fig);
+        
 end
 
 
@@ -1340,7 +1328,7 @@ table_data = get(object, 'data');
 
 % retrieve the time from the table
 selected_time = table_data{event_data.Indices(1), 2};
-go_to_time = selected_time - handles.csc_plotter.epoch_length / 2;
+go_to_time = selected_time - handles.csc_plotter.settings.epoch_length / 2;
 selected_sample = floor(go_to_time * EEG.srate);
 
 % change the hidden time keeper
@@ -1388,7 +1376,7 @@ y_limits = get(handles.main_ax, 'ylim');
 if numel(current_point) > 1
     y = current_point(1,2);
     scale = get(handles.txt_scale, 'value') *-1;
-    channel_positions = [1:handles.n_disp_chans]' * scale;
+    channel_positions = [1:handles.settings.n_disp_chans]' * scale;
     [~, closest_channel] = min(abs(y - channel_positions));
     channel_label = get(handles.labels(closest_channel), 'string');
 end
@@ -1666,9 +1654,9 @@ switch type
 
         if length(answer) == 1 %if a number was provided
           % if more channels were requested than exist in the montage, take the number in the montage
-          handles.n_disp_chans = min(str2double(answer{1}),...
+          handles.settings.n_disp_chans = min(str2double(answer{1}),...
                                      length(EEG.csc_montage.label_channels)); 
-          handles.disp_chans = [1 : handles.n_disp_chans];
+          handles.disp_chans = [1 : handles.settings.n_disp_chans];
           
         else %length(answer) == 2, so a range was provided
           disp_chans = [str2double(answer{1}) : str2double(answer{2})];
@@ -1678,16 +1666,16 @@ switch type
             return
           else %input was good
             handles.disp_chans = disp_chans;
-            handles.n_disp_chans = length(handles.disp_chans);
+            handles.settings.n_disp_chans = length(handles.disp_chans);
           end
         end
         
         % replot the grid
-        if handles.plot_vgrid
+        if handles.settings.plot_v_grid
             delete(handles.v_gridlines);
             handles = rmfield(handles, 'v_gridlines');
         end
-        if handles.plot_hgrid
+        if handles.settings.plot_h_grid
             delete(handles.h_gridlines);
             handles = rmfield(handles, 'h_gridlines');
         end
@@ -1699,20 +1687,20 @@ switch type
     case 'epoch_length'
         
         answer = inputdlg('length of epoch',...
-            '', 1, {num2str( handles.epoch_length )});
+            '', 1, {num2str( handles.settings.epoch_length )});
         
         % if different from previous
         if ~isempty(answer)
             newNumber = str2double(answer{1});
-            if newNumber ~= handles.epoch_length
-                handles.epoch_length = newNumber;
+            if newNumber ~= handles.settings.epoch_length
+                handles.settings.epoch_length = newNumber;
                 
                 % replot the grid
-                if handles.plot_vgrid
+                if handles.settings.plot_v_grid
                     delete(handles.v_gridlines);
                     handles = rmfield(handles, 'v_gridlines');
                 end
-                if handles.plot_hgrid
+                if handles.settings.plot_h_grid
                     delete(handles.h_gridlines);
                     handles = rmfield(handles, 'h_gridlines');
                 end
@@ -1760,19 +1748,19 @@ switch type
         
         % display dialogue box
         answer = inputdlg({'grid spacing (s)'} , ...
-            '', 1, {num2str( handles.v_grid_spacing )});
+            '', 1, {num2str( handles.settings.v_grid_spacing )});
         
         % check for cancelled window
         if isempty(answer); return; end
         
         % replot the grid
-        if handles.plot_vgrid
+        if handles.settings.plot_v_grid
             delete(handles.v_gridlines);
             handles = rmfield(handles, 'v_gridlines');
         end
         
         % set answer
-        handles.v_grid_spacing = round(str2double(answer));
+        handles.settings.v_grid_spacing = round(str2double(answer));
         guidata(object, handles);
         update_main_plot(object);
         
@@ -1780,19 +1768,19 @@ switch type
         
         % display dialogue box
         answer = inputdlg({'grid spacing (uV)'} , ...
-            '', 1, {num2str( handles.h_grid_spacing )});
+            '', 1, {num2str( handles.settings.h_grid_spacing )});
         
         % check for cancelled window
         if isempty(answer); return; end
         
         % replot the grid
-        if handles.plot_hgrid
+        if handles.settings.plot_h_grid
             delete(handles.h_gridlines);
             handles = rmfield(handles, 'h_gridlines');
         end
         
         % set answer
-        handles.h_grid_spacing = round(str2double(answer));
+        handles.settings.h_grid_spacing = round(str2double(answer));
         guidata(object, handles);
         update_main_plot(object);
         
@@ -1801,10 +1789,10 @@ switch type
         switch get(handles.menu.negative_toggle, 'checked')
             case 'on'
                 set(handles.menu.negative_toggle, 'checked', 'off');
-                handles.negative_up = false;
+                handles.settings.negative_up = false;
             case 'off'
                 set(handles.menu.negative_toggle, 'checked', 'on');
-                handles.negative_up = true;
+                handles.settings.negative_up = true;
         end
         
         % replot
@@ -1827,8 +1815,8 @@ switch type
     case 'filter_settings'
         
         answer = inputdlg({'low cut-off', 'high cut-off'},...
-            '', 1, {num2str( handles.filter_options(1)),...
-                    num2str( handles.filter_options(2))});
+            '', 1, {num2str( handles.settings.filter_options(1)),...
+                    num2str( handles.settings.filter_options(2))});
         
         % check for cancelled window        
         if isempty(answer); return; end
@@ -1836,8 +1824,8 @@ switch type
                 
         % get and set the new values
         new_values = str2double(answer);
-        if ~isequal(new_values, handles.filter_options')
-            handles.filter_options = new_values;
+        if ~isequal(new_values, handles.settings.filter_options')
+            handles.settings.filter_options = new_values;
             guidata(object, handles);
             update_main_plot(object);
         end
@@ -1913,10 +1901,10 @@ switch type
         switch get(handles.menu.scoring_toggle, 'checked')
             case 'on'
                 set(handles.menu.scoring_toggle, 'checked', 'off');
-                handles.scoring_mode = false;
+                handles.settings.scoring_mode = false;
             case 'off'
                 set(handles.menu.scoring_toggle, 'checked', 'on');
-                handles.scoring_mode = true;
+                handles.settings.scoring_mode = true;
         end      
         guidata(object, handles);
         
@@ -1973,13 +1961,13 @@ if isempty(event.Modifier)
         case 'leftarrow'
             % move to the previous epoch
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') - handles.epoch_length*EEG.srate);
+                get(handles.cPoint, 'Value') - handles.settings.epoch_length*EEG.srate);
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move to the next epoch
             set(handles.cPoint, 'Value',...
-                get(handles.cPoint, 'Value') + handles.epoch_length*EEG.srate);
+                get(handles.cPoint, 'Value') + handles.settings.epoch_length*EEG.srate);
             fcn_change_time(object, [])
             
         case 'uparrow'
@@ -1989,21 +1977,21 @@ if isempty(event.Modifier)
             set(handles.txt_scale, 'value', value);
             
             % replot the grid (easier like this because new scale only calculated during plot later)
-            if handles.plot_hgrid
+            if handles.settings.plot_h_grid
                 delete(handles.h_gridlines);
                 handles = rmfield(handles, 'h_gridlines');
                 guidata(object, handles);
             end
            
             % adjust vertical grid position
-            if handles.plot_vgrid
+            if handles.settings.plot_v_grid
                 % get new bottom Y
-                y_lim = [value 0] * -(handles.n_disp_chans + 1 );
+                y_lim = [value 0] * -(handles.settings.n_disp_chans + 1 );
                set(handles.v_gridlines, 'ydata', y_lim); 
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.settings.n_disp_chans+1))
             update_main_plot(object)
                        
         case 'downarrow'
@@ -2013,31 +2001,31 @@ if isempty(event.Modifier)
             set(handles.txt_scale, 'value', value);
             
             % replot the grid
-            if handles.plot_hgrid
+            if handles.settings.plot_h_grid
                 delete(handles.h_gridlines);
                 handles = rmfield(handles, 'h_gridlines');
                 guidata(object, handles);
             end
             
              % adjust vertical grid position
-            if handles.plot_vgrid
+            if handles.settings.plot_v_grid
                 % get new bottom Y
-                y_lim = [value 0] * -(handles.n_disp_chans + 1 );
+                y_lim = [value 0] * -(handles.settings.n_disp_chans + 1 );
                set(handles.v_gridlines, 'ydata', y_lim); 
             end
             
             set(handles.txt_scale, 'string', get(handles.txt_scale, 'value'));
-            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.n_disp_chans+1))
+            set(handles.main_ax, 'yLim', [get(handles.txt_scale, 'value')*-1, 0]*(handles.settings.n_disp_chans+1))
             update_main_plot(object)
             
         case 'pageup'
             
             top_channel = handles.disp_chans(1);
             
-            if top_channel -  handles.n_disp_chans < 1
-                handles.disp_chans = 1 : handles.n_disp_chans;
+            if top_channel -  handles.settings.n_disp_chans < 1
+                handles.disp_chans = 1 : handles.settings.n_disp_chans;
             else
-                handles.disp_chans = top_channel - handles.n_disp_chans : top_channel - 1;
+                handles.disp_chans = top_channel - handles.settings.n_disp_chans : top_channel - 1;
             end
             
             % redraw the plot by calling the scroll callback
@@ -2048,10 +2036,10 @@ if isempty(event.Modifier)
             
             bottom_channel = handles.disp_chans(end);
             
-            if bottom_channel +  handles.n_disp_chans - 1 > size(EEG.csc_montage.channels, 1)
-                handles.disp_chans = size(EEG.csc_montage.channels, 1) -  handles.n_disp_chans + 1 : size(EEG.csc_montage.channels, 1);
+            if bottom_channel +  handles.settings.n_disp_chans - 1 > size(EEG.csc_montage.channels, 1)
+                handles.disp_chans = size(EEG.csc_montage.channels, 1) -  handles.settings.n_disp_chans + 1 : size(EEG.csc_montage.channels, 1);
             else
-                handles.disp_chans = bottom_channel + 1 : bottom_channel + handles.n_disp_chans;
+                handles.disp_chans = bottom_channel + 1 : bottom_channel + handles.settings.n_disp_chans;
             end
                         
             % redraw the plot by calling the scroll callback
@@ -2059,12 +2047,12 @@ if isempty(event.Modifier)
             update_main_plot(object);
             
         case 'g'
-          handles.plot_vgrid = ~handles.plot_vgrid;
+          handles.settings.plot_v_grid = ~handles.settings.plot_v_grid;
           guidata(object, handles);
           update_main_plot(object);
           
         case 'h'
-            handles.plot_hgrid = ~handles.plot_hgrid;
+            handles.settings.plot_h_grid = ~handles.settings.plot_h_grid;
             guidata(object, handles);
             update_main_plot(object);
             
@@ -2072,7 +2060,7 @@ if isempty(event.Modifier)
             % is the key a valid event key?
             if any(strcmp(handles.valid_event_keys, event.Character))
                 % check if in scoring mode
-                if ~handles.scoring_mode
+                if ~handles.settings.scoring_mode
                     % force update the currentPoint property by using any callback
                     set(handles.fig, 'WindowButtonMotionFcn', 'x=1;');
                     current_point = get(handles.main_ax, 'currentPoint');
@@ -2091,9 +2079,9 @@ if isempty(event.Modifier)
                     % get the window position
                     if verLessThan('matlab', '8.4')
                         tmp_limits = get(handles.main_ax, 'xlim');
-                        current_point = floor(tmp_limits(1));
+                        current_point = floor(tmp_limits(1)*10)/10;
                     else
-                        current_point = floor(handles.main_ax.XLim(1));
+                        current_point = floor(handles.main_ax.XLim(1)*10)/10;
                     end
                     
                     % check for existing event
@@ -2110,10 +2098,10 @@ if isempty(event.Modifier)
                         event_latencies = floor(cell2mat(get(handles.events(:, 1), 'xdata'))*10)/10;
                     end
                     
-                    if any(event_latencies == [current_point + handles.scoring_offset])
+                    if any(event_latencies == [current_point + handles.settings.scoring_offset])
                         % replace that event with new label
                         event_number = ...
-                            find(event_latencies == [current_point + handles.scoring_offset]);
+                            find(event_latencies == [current_point + handles.settings.scoring_offset]);
                         
                         % check if multiple events correspond (second event (e.g. arousal) marked very close to stage marker
                         if length(event_number) > 1
@@ -2141,12 +2129,12 @@ if isempty(event.Modifier)
                         % set the appropriate marker at the start of the window
                         cb_event_selection(object, [],...
                             str2double(event.Character), ...
-                            current_point + handles.scoring_offset);
+                            current_point + handles.settings.scoring_offset);
                     end
 
                     % go to next window
                     set(handles.cPoint, 'value', ...
-                        floor([current_point + handles.scoring_window] * EEG.srate));
+                        floor([current_point + handles.settings.scoring_window] * EEG.srate));
                     
                     fcn_change_time(object, [])
                 end
@@ -2167,14 +2155,14 @@ elseif any(strcmp(event.Modifier, {'control', 'alt'}))
             % move a little to the left
             set(handles.cPoint, 'Value',...
                 floor(get(handles.cPoint, 'Value') ...
-                - handles.epoch_length/3 * EEG.srate));
+                - handles.settings.epoch_length/3 * EEG.srate));
             fcn_change_time(object, [])
             
         case 'rightarrow'
             % move a little to the right
             set(handles.cPoint, 'Value',...
                 floor(get(handles.cPoint, 'Value') ...
-                + handles.epoch_length/3 * EEG.srate));
+                + handles.settings.epoch_length/3 * EEG.srate));
             fcn_change_time(object, [])
             
         case 'pageup'
@@ -2231,7 +2219,7 @@ handles.table = uitable(...
 % set the data
 data = cell(4, 4);
 data(:, 1) = {'EEG', 'EMG', 'EOG', 'Other'};
-data(:, [2, 3]) = num2cell(handles.csc_plotter.filter_options);
+data(:, [2, 3]) = num2cell(handles.csc_plotter.settings.filter_options);
 % TODO: make color options for individual channel types
 data(:, 4) = {'d'};
 set(handles.table, 'Data', data);
@@ -2269,7 +2257,7 @@ data = get(handles.table, 'Data');
 filter_data = cell2mat(data(:, [2, 3]));
 
 % put in plotter figure handles
-handles.csc_plotter.filter_options = filter_data;
+handles.csc_plotter.settings.filter_options = filter_data;
 
 % save those handles
 guidata(handles.fig, handles);
@@ -2649,9 +2637,9 @@ else
 end
     
 % adjust the number of channels to display if necessary
-if length(EEG.csc_montage.label_channels) < handles.csc_plotter.n_disp_chans
-    handles.csc_plotter.n_disp_chans = length(EEG.csc_montage.label_channels);
-    handles.csc_plotter.disp_chans = [1:handles.csc_plotter.n_disp_chans];
+if length(EEG.csc_montage.label_channels) < handles.csc_plotter.settings.n_disp_chans
+    handles.csc_plotter.settings.n_disp_chans = length(EEG.csc_montage.label_channels);
+    handles.csc_plotter.disp_chans = [1:handles.csc_plotter.settings.n_disp_chans];
     fprintf(1, 'Warning: reduced number of display channels to match montage\n');
 end
 
