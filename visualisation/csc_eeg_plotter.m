@@ -1,3 +1,5 @@
+% Main Figure Setup 
+% ^^^^^^^^^^^^^^^^^
 function EEG = csc_eeg_plotter(EEG, varargin)
 % visualisation and event editor for time series data (EEGLAB format)
 % Author: Armand Mensen
@@ -263,9 +265,9 @@ if nargout > 0
         end
         
         % just add the hidden channels and trials to the data
-        EEG.marked_trials = handles.trials;
+        EEG.csc_marked_trials = handles.trials;
         % TODO: won't work with different montages just yet
-        EEG.hidden_channels = handles.hidden_chans;
+        EEG.csc_hidden_channels = handles.hidden_chans;
     end
    
     % close the figure
@@ -275,6 +277,7 @@ else
     EEG = [];
 end
  
+
 % File Loading and Saving
 % ^^^^^^^^^^^^^^^^^^^^^^^
 function fcn_load_eeg(object, ~)
@@ -347,6 +350,201 @@ end
 % since the data has not changed we can just save the EEG part, not the data
 save(fullfile(savePath, saveFile), 'EEG', '-mat');
 
+function EEG = initialize_loaded_eeg(object, EEG, eegData)
+
+handles = guidata(object);
+
+% check for the channel locations
+if isempty(EEG.chanlocs)
+    if isempty(EEG.urchanlocs)
+        fprintf(1, 'Warning: No channel locations found in the eegMeta structure \n');
+    else
+        fprintf(1, 'Information: Taking the EEG.urchanlocs as the channel locations \n');
+        EEG.chanlocs = EEG.urchanlocs;
+    end
+end
+
+% check for obvious change in the data
+if isfield(EEG, 'csc_montage')
+    if max(EEG.csc_montage.channels(:)) > EEG.nbchan ...
+            || (strcmp(EEG.csc_montage.name, 'original')...
+            && size(EEG.csc_montage.channels, 1) ~= EEG.nbchan)
+        fprintf(1, 'Warning: Montage does not match data; resetting montage | Note that events may no longer be accurate \n');
+        % delete the fields
+        EEG = rmfield(EEG, 'csc_montage');
+    end
+end
+
+% check event data
+% ~~~~~~~~~~~~~~~~
+if isfield(EEG, 'csc_event_data') && ~isempty(EEG.csc_event_data)
+    
+    % adjust number of events
+    handles.settings.event_number_of_types = max(handles.settings.event_number_of_types, max([EEG.csc_event_data{:, 3}]));
+    
+    % check for later event than the length of the data
+    if max([EEG.csc_event_data{:, 2}]) > EEG.xmax
+        % delete the field
+        EEG = rmfield(EEG, 'csc_event_data');
+        fprintf(1, 'Warning: Events not in range, resetting events \n'); 
+    end
+end
+
+% check event labels
+% ~~~~~~~~~~~~~~~~~~
+if isfield(EEG, 'csc_event_labels') && ~isempty(EEG.csc_event_labels)    
+    % assign correct labels to the context menu
+    for n = 1 : handles.settings.event_number_of_types
+        handles.selection.item(n) = uimenu(handles.selection.menu,...
+            'label', EEG.csc_event_labels{n, 2}, 'userData', n);
+        set(handles.selection.item(n),...
+            'callback', {@cb_event_selection, n});
+    end
+else
+    % assign defaults to the context menu
+    for n = 1 : handles.settings.event_number_of_types
+        handles.selection.item(n) = uimenu(handles.selection.menu,...
+            'label', ['event ', num2str(n)], 'userData', n);
+        set(handles.selection.item(n),...
+            'callback',     {@cb_event_selection, n});
+    end
+    % create csc_event_labels
+    EEG.csc_event_labels = cell(handles.settings.event_number_of_types, 3);
+    EEG.csc_event_labels(:, 1) = num2cell(1 : handles.settings.event_number_of_types);
+    EEG.csc_event_labels(:, 2) = {handles.selection.item.Label};
+    % TODO: include color selector for event types
+    EEG.csc_event_labels(:, 3) = {'-'};
+end
+
+% adjust spike ax for number of events
+set(handles.spike_ax, ...
+    'yLim', [0 handles.settings.event_number_of_types]);
+        
+% create cell array of the valid numbers for keyboard shortcuts
+handles.valid_event_keys = cellfun(@num2str, ...
+    num2cell(1:handles.settings.event_number_of_types), ...
+    'uniformoutput', 0);
+
+% set the color order
+if handles.settings.event_number_of_types > 7
+    set(handles.main_ax, ...
+        'colorOrder', parula(handles.settings.event_number_of_types));
+end
+
+% check for previous montage options
+% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+if ~isfield(EEG, 'csc_montage')
+    % assign defaults
+    EEG.csc_montage.name = 'original';
+    EEG.csc_montage.label_channels = cell(EEG.nbchan, 1);
+    for n = 1 : EEG.nbchan
+        EEG.csc_montage.label_channels(n) = {num2str(n)};
+        EEG.csc_montage.channel_type(n) = {'EEG'};
+    end
+    EEG.csc_montage.channels(:, 1) = 1:EEG.nbchan;
+    EEG.csc_montage.channels(:, 2) = EEG.nbchan;
+    EEG.csc_montage.scaling(:, 1) = ones(EEG.nbchan, 1);
+    EEG.csc_montage.reference = 'inherent';
+else
+    % restore hidden channels
+    if isfield(EEG, 'csc_hidden_channels')
+        handles.hidden_chans = EEG.csc_hidden_channels;
+    end
+end
+
+% check for scaling for backwards compatibility with old montages
+if ~isfield(EEG.csc_montage, 'scaling')
+    EEG.csc_montage.reference = 'inherent';
+    EEG.csc_montage.scaling(:, 1) = ones(EEG.nbchan, 1);
+end
+
+% check for channel type for backwards compatibility with old montages
+if ~isfield(EEG.csc_montage, 'channel_type')
+    for n = 1 : length(EEG.csc_montage.label_channels)
+        EEG.csc_montage.channel_type{n, 1} = 'EEG';
+    end
+end
+
+% recalculate channel types
+handles.channel_types = ones(length(EEG.csc_montage.channel_type), 1);
+channel_types = {'EEG', 'EMG', 'EOG', 'Other'};
+for n = 1 : 4
+    type_ind = cellfun(@(x) strcmp(x, channel_types{n}), EEG.csc_montage.channel_type);
+    handles.channel_types(type_ind) = n;
+end
+             
+% check that the montage has enough channels to display
+if length(EEG.csc_montage.label_channels) < handles.settings.n_disp_chans
+    handles.settings.n_disp_chans = length(EEG.csc_montage.label_channels);
+    handles.disp_chans = [1 : handles.settings.n_disp_chans];
+    fprintf(1, 'Warning: reduced number of display channels to match montage\n');
+end
+
+% load ICA time courses if the information need to construct them is available.
+if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
+    if ~isempty(EEG.icaweights) && ~isempty(EEG.icasphere)
+        % re-calculate the ICA activations
+        ica_data = (EEG.icaweights * EEG.icasphere) ...
+            * EEG.data(EEG.icachansind, :);
+        
+        % pad the remaining data in case not equal size
+        if ~[size(EEG.icaweights, 1) == size(eegData, 1)]
+            dimdiff = size(eegData, 1) - size(EEG.icaweights, 1);
+            pad = zeros(dimdiff, size(eegData, 2));
+            
+            % add to ica activations
+            ica_data = [ica_data; pad];
+            
+        end
+        
+        % save the ica data to the handles structure
+        setappdata(handles.fig, 'icaData', ica_data);
+        
+        % check for a "good_components" field
+        if ~isfield(EEG, 'good_components')
+            EEG.good_components = true(size(EEG.icaweights, 1), 1);
+        end
+        
+    end
+end
+
+% adjust initially scaling to match the data
+% find first good channel
+if isfield(EEG, 'good_channels')
+    g_chan = find(EEG.good_channels, 1);
+    channel_variance = nanstd(eegData(g_chan, :));
+else
+    channel_variance = nanstd(eegData(1, :));
+end
+set(handles.txt_scale, 'value', channel_variance * 3);
+
+% check the data length
+if EEG.pnts / EEG.srate < handles.settings.epoch_length
+    handles.settings.epoch_length = floor(EEG.pnts / EEG.srate);
+end
+
+% look for already hidden channels
+if isfield(EEG, 'csc_hidden_channels')
+    handles.hidden_channels = EEG.csc_hidden_channels;
+end
+
+% look for bad trials
+if isfield(EEG, 'csc_marked_trials')
+    handles.trials = EEG.csc_marked_trials;
+else
+    % allocate marked trials
+    handles.trials = false(EEG.trials, 1);
+end
+
+% turn on the montage option
+set(handles.menu.montage, 'enable', 'on');
+
+% update the handles
+guidata(object, handles);
+
+
+% Plotting Functions 
+% ^^^^^^^^^^^^^^^^^^
 function update_main_plot(object, flag_replot)
 % main function for plotting channels in main axis
 
@@ -644,7 +842,7 @@ setappdata(handles.fig, 'EEG', EEG);
 % update all the axes
 update_main_plot(handles.fig, false);
 
-function fcn_toggle_channel(object, ~)
+function fcn_toggle_channel(object, click_data)
 % get the handles from the guidata
 handles = guidata(object);
 
@@ -653,26 +851,36 @@ label_number = find(handles.labels == object);
 % find which channel this corresponds to
 channel_id = handles.disp_chans(label_number);
 
-% get its current state ('on' or 'off')
-state = get(handles.plot_eeg(label_number), 'visible');
-
-switch state
-    case 'on'
+switch click_data.Button
+    % left click (change hidden channel state)
+    case 1
+        % get its current state ('on' or 'off')
+        channel_state = get(handles.plot_eeg(label_number), 'visible');
+        
+        switch channel_state
+            case 'on'              
+                % turn off
+                set(handles.plot_eeg(label_number), 'visible', 'off');
+                handles.hidden_chans = [handles.hidden_chans channel_id]; % save state
+                
+            case 'off'
+                set(handles.plot_eeg(label_number), 'visible', 'on');
+                handles.hidden_chans = handles.hidden_chans(handles.hidden_chans ~= channel_id);
+        end
+        
+    % right click (change channel display colour)
+    otherwise
         % check the color
         if any(get(handles.plot_eeg(label_number), 'color') == handles.colorscheme.fg_col_1)
             % if same color then change the color
             set(handles.plot_eeg(label_number), 'Color', [0.16, 0.36, 0.60]);
         else
-            % if a different color then change back but turn off
-            set(handles.plot_eeg(label_number), 'visible', 'off');
+            % if a different color then change back to main color
             set(handles.plot_eeg(label_number), 'color', handles.colorscheme.fg_col_1);
-            handles.hidden_chans = [handles.hidden_chans channel_id]; % save state
         end
-        
-    case 'off'
-      set(handles.plot_eeg(label_number), 'visible', 'on');
-      handles.hidden_chans = handles.hidden_chans(handles.hidden_chans ~= channel_id);
 end
+
+% update handles
 guidata(object, handles);
 
 function fcn_time_select(object, ~)
@@ -706,198 +914,6 @@ set(handles.cPoint, 'Value', floor(clicked_position(1,1)));
 
 % update the plots using the change time function
 fcn_change_time(object, []);
-
-function EEG = initialize_loaded_eeg(object, EEG, eegData)
-
-handles = guidata(object);
-
-% check for the channel locations
-if isempty(EEG.chanlocs)
-    if isempty(EEG.urchanlocs)
-        fprintf(1, 'Warning: No channel locations found in the eegMeta structure \n');
-    else
-        fprintf(1, 'Information: Taking the EEG.urchanlocs as the channel locations \n');
-        EEG.chanlocs = EEG.urchanlocs;
-    end
-end
-
-% check for obvious change in the data
-if isfield(EEG, 'csc_montage')
-    if max(EEG.csc_montage.channels(:)) > EEG.nbchan ...
-            || (strcmp(EEG.csc_montage.name, 'original')...
-            && size(EEG.csc_montage.channels, 1) ~= EEG.nbchan)
-        fprintf(1, 'Warning: Montage does not match data; resetting montage | Note that events may no longer be accurate \n');
-        % delete the fields
-        EEG = rmfield(EEG, 'csc_montage');
-    end
-end
-
-% check event data
-% ~~~~~~~~~~~~~~~~
-if isfield(EEG, 'csc_event_data') && ~isempty(EEG.csc_event_data)
-    
-    % adjust number of events
-    handles.settings.event_number_of_types = max(handles.settings.event_number_of_types, max([EEG.csc_event_data{:, 3}]));
-    
-    % check for later event than the length of the data
-    if max([EEG.csc_event_data{:, 2}]) > EEG.xmax
-        % delete the field
-        EEG = rmfield(EEG, 'csc_event_data');
-        fprintf(1, 'Warning: Events not in range, resetting events \n'); 
-    end
-end
-
-% check event labels
-% ~~~~~~~~~~~~~~~~~~
-if isfield(EEG, 'csc_label_data') && ~isempty(EEG.csc_label_data)    
-    % assign correct labels to the context menu
-    for n = 1 : handles.settings.event_number_of_types
-        handles.selection.item(n) = uimenu(handles.selection.menu,...
-            'label', EEG.csc_label_data{n, 2}, 'userData', n);
-        set(handles.selection.item(n),...
-            'callback', {@cb_event_selection, n});
-    end
-else
-    % assign defaults to the context menu
-    for n = 1 : handles.settings.event_number_of_types
-        handles.selection.item(n) = uimenu(handles.selection.menu,...
-            'label', ['event ', num2str(n)], 'userData', n);
-        set(handles.selection.item(n),...
-            'callback',     {@cb_event_selection, n});
-    end
-    % create csc_label_data
-    EEG.csc_label_data = cell(handles.settings.event_number_of_types, 3);
-    EEG.csc_label_data(:, 1) = num2cell(1 : handles.settings.event_number_of_types);
-    EEG.csc_label_data(:, 2) = {handles.selection.item.Label};
-    % TODO: include color selector for event types
-    EEG.csc_label_data(:, 3) = {'-'};
-end
-
-% adjust spike ax for number of events
-set(handles.spike_ax, ...
-    'yLim', [0 handles.settings.event_number_of_types]);
-        
-% create cell array of the valid numbers for keyboard shortcuts
-handles.valid_event_keys = cellfun(@num2str, ...
-    num2cell(1:handles.settings.event_number_of_types), ...
-    'uniformoutput', 0);
-
-% set the color order
-if handles.settings.event_number_of_types > 7
-    set(handles.main_ax, ...
-        'colorOrder', parula(handles.settings.event_number_of_types));
-end
-
-% check for previous montage options
-% ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if ~isfield(EEG, 'csc_montage')
-    % assign defaults
-    EEG.csc_montage.name = 'original';
-    EEG.csc_montage.label_channels = cell(EEG.nbchan, 1);
-    for n = 1 : EEG.nbchan
-        EEG.csc_montage.label_channels(n) = {num2str(n)};
-        EEG.csc_montage.channel_type(n) = {'EEG'};
-    end
-    EEG.csc_montage.channels(:, 1) = 1:EEG.nbchan;
-    EEG.csc_montage.channels(:, 2) = EEG.nbchan;
-    EEG.csc_montage.scaling(:, 1) = ones(EEG.nbchan, 1);
-    EEG.csc_montage.reference = 'inherent';
-else
-    % restore hidden channels
-    if isfield(EEG, 'hidden_channels')
-        handles.hidden_chans = EEG.hidden_channels;
-    end
-end
-
-% check for scaling for backwards compatibility with old montages
-if ~isfield(EEG.csc_montage, 'scaling')
-    EEG.csc_montage.reference = 'inherent';
-    EEG.csc_montage.scaling(:, 1) = ones(EEG.nbchan, 1);
-end
-
-% check for channel type for backwards compatibility with old montages
-if ~isfield(EEG.csc_montage, 'channel_type')
-    for n = 1 : length(EEG.csc_montage.label_channels)
-        EEG.csc_montage.channel_type{n, 1} = 'EEG';
-    end
-end
-
-% recalculate channel types
-handles.channel_types = ones(length(EEG.csc_montage.channel_type), 1);
-channel_types = {'EEG', 'EMG', 'EOG', 'Other'};
-for n = 1 : 4
-    type_ind = cellfun(@(x) strcmp(x, channel_types{n}), EEG.csc_montage.channel_type);
-    handles.channel_types(type_ind) = n;
-end
-             
-% check that the montage has enough channels to display
-if length(EEG.csc_montage.label_channels) < handles.settings.n_disp_chans
-    handles.settings.n_disp_chans = length(EEG.csc_montage.label_channels);
-    handles.disp_chans = [1 : handles.settings.n_disp_chans];
-    fprintf(1, 'Warning: reduced number of display channels to match montage\n');
-end
-
-% load ICA time courses if the information need to construct them is available.
-if isfield(EEG, 'icaweights') && isfield(EEG, 'icasphere')
-    if ~isempty(EEG.icaweights) && ~isempty(EEG.icasphere)
-        % re-calculate the ICA activations
-        ica_data = (EEG.icaweights * EEG.icasphere) ...
-            * EEG.data(EEG.icachansind, :);
-        
-        % pad the remaining data in case not equal size
-        if ~[size(EEG.icaweights, 1) == size(eegData, 1)]
-            dimdiff = size(eegData, 1) - size(EEG.icaweights, 1);
-            pad = zeros(dimdiff, size(eegData, 2));
-            
-            % add to ica activations
-            ica_data = [ica_data; pad];
-            
-        end
-        
-        % save the ica data to the handles structure
-        setappdata(handles.fig, 'icaData', ica_data);
-        
-        % check for a "good_components" field
-        if ~isfield(EEG, 'good_components')
-            EEG.good_components = true(size(EEG.icaweights, 1), 1);
-        end
-        
-    end
-end
-
-% adjust initially scaling to match the data
-% find first good channel
-if isfield(EEG, 'good_channels')
-    g_chan = find(EEG.good_channels, 1);
-    channel_variance = nanstd(eegData(g_chan, :));
-else
-    channel_variance = nanstd(eegData(1, :));
-end
-set(handles.txt_scale, 'value', channel_variance * 3);
-
-% check the data length
-if EEG.pnts / EEG.srate < handles.settings.epoch_length
-    handles.settings.epoch_length = floor(EEG.pnts / EEG.srate);
-end
-
-% look for already hidden channels
-if isfield(EEG, 'hidden_channels')
-    handles.hidden_channels = EEG.hidden_channels;
-end
-
-% look for bad trials
-if isfield(EEG, 'marked_trials')
-    handles.trials = EEG.marked_trials;
-else
-    % allocate marked trials
-    handles.trials = false(EEG.trials, 1);
-end
-
-% turn on the montage option
-set(handles.menu.montage, 'enable', 'on');
-
-% update the handles
-guidata(object, handles);
 
 function fcn_close_window(object, ~)
 % just resume the ui if the figure is closed
@@ -1033,7 +1049,7 @@ set(handles.button_apply, 'callback', {@fcn_label_options, 'apply'});
 
 % put the data into the table
 EEG = getappdata(handles.csc_plotter.fig, 'EEG');
-set(handles.table, 'data', EEG.csc_label_data);
+set(handles.table, 'data', EEG.csc_event_labels);
 
 % update the GUI handles
 guidata(handles.fig, handles)
@@ -1142,7 +1158,7 @@ switch option
         
         % put into the EEG structure
         EEG = getappdata(handles.csc_plotter.fig, 'EEG');
-        EEG.csc_label_data = label_data;
+        EEG.csc_event_labels = label_data;
         EEG.csc_event_data = fcn_compute_events(handles.csc_plotter);
         setappdata(handles.csc_plotter.fig, 'EEG', EEG);
         
