@@ -2,14 +2,14 @@
 
 % compare two sleep scoring files
 EEG.csc_event_data = event_data_AM;
-[EEG, table_data, handles] = csc_events_to_hypnogram(EEG, 0);
+[EEG, table_data, handles] = csc_events_to_hypnogram(EEG, 0, 1, 0);
 
 % get hypnogram
 hypnogram(1, :) = EEG.swa_scoring.stages;
 
 % compare two sleep scoring files
 EEG.csc_event_data = event_data_NH;
-[EEG, table_data, handles] = csc_events_to_hypnogram(EEG, 0);
+[EEG, table_data, handles] =  csc_events_to_hypnogram(EEG, 0, 1, 0);
 
 % get hypnogram
 hypnogram(2, :) = EEG.swa_scoring.stages;
