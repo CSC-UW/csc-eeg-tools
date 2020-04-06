@@ -1,4 +1,9 @@
-function channels = mff_import_signal_binary(signal_binary, channels_index, blocks_list)
+function channels = mff_import_signal_binary(signal_binary, channels_index, blocks_list, precision_type)
+
+if nargin < 4
+    precision_type = 'double'; % single | double
+end
+
     if isequal(channels_index, 'all')
         channels_index = 1:signal_binary.num_channels;
     end
@@ -11,7 +16,11 @@ function channels = mff_import_signal_binary(signal_binary, channels_index, bloc
     
     num_blocks = length(blocks_list);
     
-    id = fopen(signal_binary.file, 'r', 'l');
+    if strcmp(precision_type, 'single')
+        id = fopen(signal_binary.file, 'r', 'l');
+    else
+        id = fopen(signal_binary.file, 'r', 'a');
+    end
     
     block_offsets          = signal_binary.blocks.offset(blocks_list, channels_index);
     block_num_samples      = signal_binary.blocks.num_samples(blocks_list, channels_index);
@@ -26,7 +35,7 @@ function channels = mff_import_signal_binary(signal_binary, channels_index, bloc
     for channel_num = 1:num_channels
         channels(channel_num).num           = channels_index(channel_num);
         channels(channel_num).sampling_rate = channel_sampling_rates(channel_num);
-        channels(channel_num).samples       = zeros(1, channel_num_samples(channel_num), 'single');
+        channels(channel_num).samples       = zeros(1, channel_num_samples(channel_num), precision_type);
     end
     
     for block_num = 1:num_blocks
@@ -38,7 +47,7 @@ function channels = mff_import_signal_binary(signal_binary, channels_index, bloc
             num_samples = block_num_samples(block_num, channel_num);
             sample_from = channel_offsets(block_num, channel_num);
             sample_to   = sample_from + num_samples - 1;
-            % read as a single directly rather than converting after
+            % NOTE: apparently the data is stored as a single, and loading as double results in attempting to over-sample 
             samples     = fread(id, [1, num_samples], '*single');
             
             channels(channel_num).samples(sample_from:sample_to) = calibrated_gains(block_num, channel_num) * (samples(:) - calibrated_zeros(block_num, channel_num));
