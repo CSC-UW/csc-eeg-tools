@@ -27,7 +27,15 @@ if nargin < 4
     flag_type = 0; % default to csc table
 end
 
-% remove all event 4 and save in separate arousal/artefact table
+%% make sure events are sorted by time
+[~, sort_ind] = sort([EEG.csc_event_data{:, 2}]);
+EEG.csc_event_data = EEG.csc_event_data(sort_ind, :);
+
+%% remove any events > 6
+non_sleep_events = [EEG.csc_event_data{:, 3}] > 6;
+EEG.csc_event_data(non_sleep_events, :) = [];
+
+%% remove all event 4 and save in separate arousal/artefact table
 % ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 % find event 4s
 event4_logical = [EEG.csc_event_data{:, 3}] == 4;
@@ -73,7 +81,7 @@ elseif flag_mode == 1
 end
 
 
-% produce the sleep scoring stages %
+%% produce the sleep scoring stages %
 % '''''''''''''''''''''''''''''''' %
 % create a temporary table without event 4
 tmp_events = EEG.csc_event_data(~event4_logical, :);
@@ -116,7 +124,7 @@ else
     table_data = swa_sleep_statistics(EEG, 0, 'english', flag_mode);
 end
 
-% plot classic hypnogram and stage pie chart
+%% plot classic hypnogram and stage pie chart
 if flag_plot
     
     % add 1 to all stages except wake
@@ -136,7 +144,7 @@ if flag_plot
     handles.ax = axes('nextplot', 'add', ...
         'xlim', [0, time_range(end)], ...
         'ytick', 0:4, ...
-        'yticklabel', {'WACH', 'REM', 'N1', 'N2', 'N3'}, ...
+        'yticklabel', {'WAKE', 'REM', 'N1', 'N2', 'N3'}, ...
         'yDir', 'reverse', ...
         'ylim', [-0.5, 4.5]);
     handles.hypno = plot(time_range, stages, ...

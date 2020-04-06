@@ -1,15 +1,11 @@
 function marked_epochs = csc_compare_scoring(EEG, event_data, flag_type, flag_plot)
-
-% check event_data
-if isa(event_data, 'cell')
-    error('Error: incorrect information for the event_data')
-end
-if numel(event_data) ~= 2
-    error('Error: incorrect information for the event_data')
-end
     
 %% load the 2 scoring files
 if nargin < 1
+   EEG = pop_loadset(); 
+end
+
+if nargin < 2
 
     % initialise event_data
     event_data = cell(0);
@@ -21,6 +17,19 @@ if nargin < 1
     else
         error('must select 2 files');
     end
+end
+
+if nargin < 4
+    flag_type = 1;
+    flag_plot = 0;
+end
+
+% check event_data
+if ~isa(event_data, 'cell')
+    error('Error: incorrect information for the event_data')
+end
+if numel(event_data) ~= 2
+    error('Error: incorrect information for the event_data')
 end
 
 %% classic scoring
@@ -49,33 +58,64 @@ end
 
 %% continuous scoring
 if flag_type == 1
+    % calculate the hypnogram from first file...
     EEG.csc_event_data = event_data{1};
     [EEG, table_data, handles] = csc_events_to_hypnogram(EEG, 0, 1, 0);
     
-    % get hypnogram
+    % get continuous hypnogram
     hypnogram(1, :) = EEG.swa_scoring.stages;
-    
-    % compare two sleep scoring files
+    % get classic hypnogram
+    classic_hypnogram = nan(size(hypnogram));
+    [~, classic_hypnogram(1, :)] = csc_convert_to_classic(EEG, 0);
+   
+    % calculate the hypnogram from second file...
     EEG.csc_event_data = event_data{2};
     [EEG, table_data, handles] =  csc_events_to_hypnogram(EEG, 0, 1, 0);
     
     % get hypnogram
     hypnogram(2, :) = EEG.swa_scoring.stages;
+    [~, classic_hypnogram(2, :)] = csc_convert_to_classic(EEG, 0);
+
+    
+    % in case of -1
+    % hypnogram(hypnogram == -1) = 0;
+    
+    % calculate total overlap
+%     different_stages = 
+    
+    % calculate confusion matrix
+    [confusion_matrix, order] = confusionmat(hypnogram(1, :), hypnogram(2, :), ...
+        'order', [0, 1, 2, 3, 5]);
+    h_fig = figure('color', 'w');
+    [confusion_chart] = confusionchart(confusion_matrix, ...
+        {'wake', 'N1', 'N2', 'N3', 'REM'}, ...
+        'normalization', 'row-normalized', ...
+        'RowSummary', 'row-normalized', ...
+        'ColumnSummary', 'column-normalized', ...
+        'xlabel', file_name{2}, ...
+        'ylabel', file_name{1});
+
+    
+    % calculate sleep/wake agreement
+    
     
     if flag_plot
         % plot both
         handles.fig = figure('color', 'w');
         handles.ax = axes('nextplot', 'add', ...
-            'yDir', 'reverse');
+            'yDir', 'reverse', ...
+            'ylim', [-0.5, 5.5]);
         
-        plot(hypnogram(2, :)', ...
-            'color', [0.7, 0.7, 0.7], ...
-            'lineWidth', 3);
-        plot(single(hypnogram(1, :))' + 0.1, ...
-            'color', [0.3, 0.3, 0.3], ...
+        plot(hypnogram(1, :)', ...
+            'color', [0.1, 0.7, 0.7], ...
+            'lineWidth', 1);
+        plot(single(hypnogram(2, :))' + 0.1, ...
+            'color', [0.3, 0.3, 1], ...
             'lineWidth', 1);
         
-        title(EEG.filename);
+        title(EEG.filename, 'Interpreter', 'none');
         legend(file_name, 'Interpreter', 'none');
     end    
+    
+    
 end
