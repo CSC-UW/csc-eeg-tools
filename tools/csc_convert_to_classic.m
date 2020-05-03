@@ -58,4 +58,13 @@ epoch_starts = 1 : epoch_length : epoch_length * num_epochs;
 classic_list = classic_hypnogram (epoch_starts);
 
 %% create an event list (for csc_eeg_plotter)
-classic_events = [];
+temp_list = classic_list;
+temp_list(temp_list == -1 | temp_list == 0) = 6; 
+
+num_events = size(temp_list, 2);
+classic_events = cell(num_events, 4);
+classic_events(:, 2) = num2cell(0 : epoch_length_sec : num_events * epoch_length_sec - 1); % event number
+classic_events(:, 3) = num2cell(temp_list); % event number
+% add labels to the events
+labels = {'N1', 'N2', 'N3', 'artifact', 'REM', 'wake', 'check_next'};
+classic_events(:, 1) = {labels{[classic_events{:, 3}]}};

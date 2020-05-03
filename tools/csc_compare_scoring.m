@@ -1,16 +1,20 @@
-function marked_epochs = csc_compare_scoring(EEG, event_data, flag_type, flag_plot)
+function [agreement, marked_epochs, confusion_matrix] = csc_compare_scoring(EEG, event_data, flag_type, flag_plot)
     
-%% load the 2 scoring files
+% need the EEG structure for total file length
 if nargin < 1
-   EEG = pop_loadset(); 
+   [file_name, file_path] = uigetfile('*.set');
+   load(fullfile(file_path, file_name), '-mat');
 end
 
+%% load the 2 scoring files
 if nargin < 2
-
+    
+    % ask user for the files 
+    % NOTE: in case the order should be reversed "file_name = fliplr(file_name)"
+    [file_name, file_path] = uigetfile('*.mat', 'MultiSelect', 'on');
+    
     % initialise event_data
     event_data = cell(0);
-    
-    [file_name, file_path] = uigetfile('*.mat', 'MultiSelect', 'on');
     if length(file_name) == 2
         event_data{1} = importdata(fullfile(file_path, file_name{1}));
         event_data{2} = importdata(fullfile(file_path, file_name{2}));
@@ -51,6 +55,7 @@ if flag_type == 0
     stage_diff = stages(:, 1) ~= stages(:, 2);
     num_diff = sum(stage_diff);
     marked_epochs = find(stage_diff);
+    agreement = 100 - num_diff/num_stages*100;
     
     fprintf(1, 'There are %i epochs scored differently; %01.f%% of the data \n', num_diff, num_diff/num_stages*100);
     pie(categorical(stages(marked_epochs, 2)));
@@ -76,9 +81,20 @@ if flag_type == 1
     hypnogram(2, :) = EEG.swa_scoring.stages;
     [~, classic_hypnogram(2, :)] = csc_convert_to_classic(EEG, 0);
 
-    
     % in case of -1
-    % hypnogram(hypnogram == -1) = 0;
+    hypnogram(hypnogram == -1) = 0;
+    
+    % make all N3 = N2
+    % hypnogram(hypnogram == 3) = 2;
+    
+    % find differences
+    stage_diff = hypnogram(1, :) ~= hypnogram(2, :);
+    num_diff = sum(stage_diff);
+    marked_epochs = find(stage_diff);
+    agreement = 100 - num_diff/length(stage_diff)*100;
+
+    fprintf(1, 'There are %i epochs scored differently; %01.f%% of the data \n', num_diff, num_diff/length(stage_diff)*100);
+    
     
     % calculate total overlap
 %     different_stages = 
@@ -86,21 +102,22 @@ if flag_type == 1
     % calculate confusion matrix
     [confusion_matrix, order] = confusionmat(hypnogram(1, :), hypnogram(2, :), ...
         'order', [0, 1, 2, 3, 5]);
-    h_fig = figure('color', 'w');
-    [confusion_chart] = confusionchart(confusion_matrix, ...
-        {'wake', 'N1', 'N2', 'N3', 'REM'}, ...
-        'normalization', 'row-normalized', ...
-        'RowSummary', 'row-normalized', ...
-        'ColumnSummary', 'column-normalized', ...
-        'xlabel', file_name{2}, ...
-        'ylabel', file_name{1});
-
-    
-    % calculate sleep/wake agreement
     
     
     if flag_plot
-        % plot both
+
+        % plot confusion matrix
+        h_fig = figure('color', 'w');
+        
+        [confusion_chart] = confusionchart(confusion_matrix, ...
+            {'wake', 'N1', 'N2', 'N3', 'REM'}, ...
+            'normalization', 'row-normalized', ...
+            'RowSummary', 'row-normalized', ...
+            'ColumnSummary', 'column-normalized', ...
+            'xlabel', file_name{2}, ...
+            'ylabel', file_name{1});
+
+        % plot both hypnograms
         handles.fig = figure('color', 'w');
         handles.ax = axes('nextplot', 'add', ...
             'yDir', 'reverse', ...
@@ -113,9 +130,8 @@ if flag_type == 1
             'color', [0.3, 0.3, 1], ...
             'lineWidth', 1);
         
+        yticklabels({'wake'; 'N1'; 'N2'; 'N3'; ' '; 'REM'})
         title(EEG.filename, 'Interpreter', 'none');
         legend(file_name, 'Interpreter', 'none');
     end    
-    
-    
 end
