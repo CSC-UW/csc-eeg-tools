@@ -1635,9 +1635,13 @@ switch option
         % save the events as a file
         event_data = fcn_compute_events(handles.csc_plotter);
 
+        % get the EEG header
+        EEG = getappdata(handles.csc_plotter.fig, 'EEG');
+        file_name = EEG.filename;
+
         % Ask where to put file...
         [saveFile, savePath] = uiputfile('*.mat');
-        save(fullfile(savePath, saveFile), 'event_data', '-mat');
+        save(fullfile(savePath, saveFile), 'event_data', 'file_name', '-mat');
         
 end
 
