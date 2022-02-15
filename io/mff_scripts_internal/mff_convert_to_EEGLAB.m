@@ -105,6 +105,8 @@ if FLAG_TO_STRUCT
             EEG.data(current_channel, :) = temp_data.samples;
             
         end
+        EEG.srate = EEG.srate / 2;
+        EEG.pnts = size(EEG.data, 2);
     end
     
     % delete the progress bar
